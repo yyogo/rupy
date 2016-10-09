@@ -494,17 +494,19 @@ class buf(bytearray):
         Bla bla something shomething fields
         If strict is True, total sizes must match.
 
-        >>> a = b.fields('<LL3B')
-        >>> a[0]
-        0
-        >>> a[0] = 4321
-        >>> from rupy.fields import uint32, raw
-        >>> s = b.fields([('x', uint32), ('y', uint32), ('z', raw(3))])
+        >>> from rupy.fields import uint32, Bytes
+        >>> s = b.fields([('x', uint32), ('y', uint32), ('z', Bytes(3))])
         >>> s.x
         4321
         >>> s.y = 1234
         """
-        ## TODO!!
+        from rupy import fields
+        map = fields.FieldMap(fieldspec)
+        if strict:
+            if len(self) != map.size:
+                raise ValueError("Field map size mismatch (and 'strict' is True)")
+        return map.unpack(self)
+
 
     @property
     def bits(self):
