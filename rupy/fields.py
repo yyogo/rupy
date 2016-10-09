@@ -51,6 +51,8 @@ int64b = BasicField(">q")
 class FieldView(object):
     _fieldset = None
     def __init__(self, buf):
+        if len(buf) < self._fieldset.size:
+            raise ValueError("Not enough data in buffer")
         self.__buffer__ = buf
 
     def __len__(self):
@@ -116,6 +118,7 @@ def setter(i):
 
 
 def parse_field_spec(s):
+
     if s in globals():
         return globals()[s]
     m = re.match(r'(\w+)\(([0-9]+)\)', s)
@@ -165,6 +168,8 @@ class FieldMap(FieldSet):
                 v_rep = repr(self[i]).splitlines(False)
                 if k is not None:
                     v_rep[0] = ("%s = " % k) + v_rep[0]
+                else:
+                    v_rep[0] = ("[%d]: " % i) + v_rep[0]
                 for l in v_rep:
                     res.append("   " + l)
             res.append('>')
@@ -201,12 +206,12 @@ if __name__ == '__main__':
 
     f4 = FieldMap([
         ('foo', 'int16[2]'),
-        ('bazz', [
+        [
             ("a", 'uint16'),
             'uint32',
             ("c", 'uint64'),
             ("d", 'Bytes(10)'),
-        ])
+        ]
     ])
     print f4.unpack(test2)
 

@@ -4,9 +4,7 @@ import binascii
 from rupy.bitview import BitView
 import itertools
 
-import collections
-
-from rupy import hexdump
+from rupy.hexdump import HexDump
 
 
 class buf(bytearray):
@@ -406,7 +404,7 @@ class buf(bytearray):
             raise OverflowError("int too big to convert")
 
         if signed and n < 0:
-            n = (1 << (size * 8)) + n
+            n += (1 << (size * 8))
 
         bl = cls(size)
 
@@ -432,7 +430,7 @@ class buf(bytearray):
             other = itertools.cycle([other])
         else:
             other = self.__class__(itertools.islice(other, len(self)))
-        return self.__class__(x ^ y for x,y in zip(self, other))
+        return self.__class__(x ^ y for x, y in zip(self, other))
 
     def __and__(self, other):
         """ b.__and__(y) <==> b & y"""
@@ -440,7 +438,7 @@ class buf(bytearray):
             other = itertools.cycle([other])
         else:
             other = self.__class__(itertools.islice(other, len(self)))
-        return self.__class__(x & y for x,y in zip(self, other))
+        return self.__class__(x & y for x, y in zip(self, other))
 
     def __or__(self, other):
         """ b.__or__(y) <==> b | y"""
@@ -448,14 +446,14 @@ class buf(bytearray):
             other = itertools.cycle([other])
         else:
             other = self.__class__(itertools.islice(other, len(self)))
-        return self.__class__(x | y for x,y in zip(self, other))
+        return self.__class__(x | y for x, y in zip(self, other))
 
     def __invert__(self):
         """ b.__invert__() <==> ~b """
         return self.__class__((~x) & 0xff for x in self)
 
     def hexdump(self, *args, **kwargs):
-        return hexdump.hexdump(self, *args, **kwargs)
+        return HexDump(self, *args, **kwargs)
 
     @classmethod
     def random(cls, size=None):
@@ -487,26 +485,36 @@ class buf(bytearray):
         else:
             return (self[i:i+blocksize].rpad(blocksize, fillchar) for i in xrange(0, len(self), blocksize))
 
-    def fields(self, fieldspec, strict=False):
+    def fields(self, fieldspec, offset=0, strict=False):
         """
-        b.fields(fieldspec[, strict=False]) -> FieldView
+        b.fields(fieldspec[, offset[, strict=False]]) -> BoundFieldMap
 
-        Bla bla something shomething fields
+        Create a field mapping of the buf instance with the specified field spec.
+        **NOTE**: Upon creating a bound field mapping, the buffer's size cannot change as long as it is referenced
+        by it.
+
+        TODO - Document this function
         If strict is True, total sizes must match.
 
-        >>> from rupy.fields import uint32, Bytes
-        >>> s = b.fields([('x', uint32), ('y', uint32), ('z', Bytes(3))])
+        >>> s = b.fields("x:uint32  y:uint32  z:Bytes(4)")
         >>> s.x
         4321
         >>> s.y = 1234
-        """
-        from rupy import fields
-        map = fields.FieldMap(fieldspec)
-        if strict:
-            if len(self) != map.size:
-                raise ValueError("Field map size mismatch (and 'strict' is True)")
-        return map.unpack(self)
 
+        >>> b.fields("int32", 1024)[0] = 12
+        """
+
+        from rupy import fields
+        if isinstance(fieldspec, str):
+            # convenience, allows writing stuff like "a:int32 b:int64 c:Bytes(16)" etc.
+            #TODO Improve this silly DSL to support nested stuff
+            fieldspec = [tuple(x.split(':',1)) if ':' in x else x for x in fieldspec.split()]
+
+        map = fields.FieldMap(fieldspec)
+        data = memoryview(self)[offset:offset + map.size]
+        if strict and len(data) != map.size:
+            raise ValueError("Field map size mismatch (and 'strict' is True)")
+        return map.unpack(data)
 
     @property
     def bits(self):

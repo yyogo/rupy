@@ -78,7 +78,7 @@ class HexDump(object):
         last = None
         skipped = False
         lines = []
-
+        i = 0
         for i in xrange(len(self)):
             l = self._mv[i * self.width:(i + 1) * self.width]
             if l == last and skip_dups:
