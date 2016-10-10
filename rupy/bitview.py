@@ -2,16 +2,17 @@ import itertools
 
 class BitView(object):
     def __init__(self, object, start=None, stop=None, step=None):
-        self.object = object
+        self.__buffer__ = object
         self.slice = slice(start, stop, step)
-        self._range = xrange(*self.slice.indices(len(self.object) * 8))
+        self._range = xrange(*self.slice.indices(len(self.__buffer__) * 8))
 
     def _get(self, idx):
-        return (self.object[idx / 8] >> (idx % 8)) & 1
+        return (self.__buffer__[idx / 8] >> ((idx ^ 7) & 7)) & 1
 
     def _set(self, idx, value):
-        b = self.object[idx / 8] & (~(1 << (idx % 8)))
-        self.object[idx / 8] = b | (bool(value) << (idx % 8))
+        idx ^= 7
+        b = self.__buffer__[idx / 8] & (~(1 << (idx & 7)))
+        self.__buffer__[idx / 8] = b | (bool(value) << (idx & 7))
 
     def __getitem__(self, item):
         if isinstance(item, slice):
@@ -40,14 +41,14 @@ class BitView(object):
             yield self._get(i)
 
     def __str__(self):
-        return u''.join('01'[self._get(i)] for i in self._range)
+        return bin(self.toint())[2:].zfill(len(self))
 
     def __repr__(self):
         return '<BitView of %s(%d) instance (%s, %s, %s)>' % (
-            type(self.object), len(self.object), self.slice.start, self.slice.stop, self.slice.step)
+            type(self.__buffer__), len(self.__buffer__), self.slice.start, self.slice.stop, self.slice.step)
 
     def __nonzero__(self):
-        return any(x != 0 for x in self)
+        return any(x for x in self)
 
     def __ixor__(self, other):
         for i, x in itertools.izip(self._range, other):
@@ -65,6 +66,10 @@ class BitView(object):
         return self
 
     def invert(self):
+        """
+
+        Invert each bit in the range
+        """
         self.__ixor__(itertools.cycle([1]))
 
     def set(self, index=None):
@@ -82,7 +87,7 @@ class BitView(object):
             self._set(index, 0)
 
     def apply(self, bits):
-        for i, x in itertools.izip(self._range, bits):
+        for i, x in zip(self._range, bits):
             self._set(i, x)
 
     def toint(self, little_endian=False):
@@ -99,9 +104,28 @@ class BitView(object):
             self[i] = n & 1
             n >>= 1
 
+    def tobytes(self):
+        if len(self) % 8 != 0:
+            raise ValueError("Bit view not aligned to octet")
+        from rupy.buf import buf
+        return buf.fromint(self.toint(), little_endian=False)
+
+    def rev8(self):
+        if len(self) % 8 != 0:
+            raise ValueError("Bit view not aligned to octet")
+        for i in xrange(0, len(self), 8):
+             self[i:i+8] = self[i:i+8][::-1]
+
+    def reverse(self):
+        """
+
+        Reverse the bits of the buffer in-place
+        """
+        self[:] = self[::-1]
+
     def _subslice(self, sl):
         start, stop, step = sl.indices(len(self))
-        mstart, mstop, mstep = self.slice.indices(len(self.object) * 8)
+        mstart, mstop, mstep = self.slice.indices(len(self.__buffer__) * 8)
         sstart = mstart + mstep * start
         sstop = mstart + mstep * stop
         sstep = mstep * step
@@ -109,6 +133,6 @@ class BitView(object):
             sstart = None
         if sstop < 0 and sstep < 0:
             sstop = None
-        return BitView(self.object, sstart, sstop, sstep)
+        return BitView(self.__buffer__, sstart, sstop, sstep)
 
 

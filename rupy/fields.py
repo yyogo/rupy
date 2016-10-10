@@ -118,7 +118,6 @@ def setter(i):
 
 
 def parse_field_spec(s):
-
     if s in globals():
         return globals()[s]
     m = re.match(r'(\w+)\(([0-9]+)\)', s)
