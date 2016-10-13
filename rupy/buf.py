@@ -1,3 +1,4 @@
+import io
 import re
 import string
 import binascii
@@ -23,8 +24,8 @@ except ImportError:
 
 
 
-_REV8 = [int(bin(i)[2:].zfill(8)[::-1], 2) for i in range(256)]
-_POPCNT = [bin(i).count('1') for i in range(256)]
+_REV8 = tuple(int(bin(i)[2:].zfill(8)[::-1], 2) for i in range(256))
+_POPCNT = tuple(bin(i).count('1') for i in range(256))
 
 class buf(bytearray):
     """
@@ -530,12 +531,7 @@ class buf(bytearray):
         >>> all(x.count(b) < 20 for b in range(256))
         True
         """
-        try:
-            import os
-            return cls(os.urandom(size))
-        except ImportError:
-            import random
-            return cls(random.randrange(256) for i in xrange(size))
+        return cls(urandom(size))
 
     def at(self, offset, length=1):
         """b.at(offset, length=1) <==> b[offset:offset + length]"""
@@ -570,7 +566,7 @@ class buf(bytearray):
         else:
             return (self[i:i+blocksize].rpad(blocksize, fillchar) for i in xrange(0, len(self), blocksize))
 
-    def unpack(self, fmt, offset=None):
+    def unpack(self, fmt, offset=0):
         """
         b.unpack(fmt[, offset]) -> tuple
 
@@ -582,10 +578,7 @@ class buf(bytearray):
         >>> b.unpack('<L', 2) == (3450566742,)
         True
         """
-        if offset is None:
-            return struct.unpack(fmt, self)
-        else:
-            return struct.unpack_from(fmt, self, offset)
+        return struct.unpack_from(fmt, self, offset)
 
     @classmethod
     def pack(cls, fmt, *values):
@@ -616,7 +609,7 @@ class buf(bytearray):
         If strict is True, total sizes must match.
 
         >>> b = buf(hex='deadbeefaabbccdd01234567')
-        >>> s = b.fields("x:uint32  y:uint32b  z:Bytes(4)")
+        >>> s = b.fields("x:uint32  y:uint32b  z:Bytes[4]")
         >>> s.x == 0xefbeadde
         True
         >>> s.z == buf(hex='01234567')
@@ -690,4 +683,84 @@ class buf(bytearray):
         Return the CRC32 checksum of the buffer.
         """
         return _crc32(buffer(self))
+
+    @classmethod
+    def fromfile(cls, fobj_or_filename, length=None, offset=0):
+        """
+        buf.fromfile(fobj_or_filename[, length[, offset=0]]) -> buf
+
+        Read data from file or file-like object into a new buf.
+
+        >>> f = io.BytesIO("Norwegian Blue")
+        >>> print buf.fromfile(f, 9)
+        Norwegian
+        >>> _ = f.seek(0, 0)
+        >>> print buf.fromfile(f, offset=10)
+        Blue
+        """
+        if hasattr(fobj_or_filename, 'read') or hasattr(fobj_or_filename, 'readinto'):
+            fobj = fobj_or_filename
+            if isinstance(fobj, file):
+                # default file object's readinto() is bad, m'kay?
+                fobj = io.open(fobj.fileno(), fobj.mode)
+        else:
+            fobj = io.open(fobj_or_filename, 'rb')
+        fobj.seek(offset, 1)
+        if hasattr(fobj, 'readinto'):
+            # read inplace if possible
+            if length is None:
+                pos = fobj.tell()
+                fobj.seek(0, 2)
+                length = fobj.tell() - pos
+                fobj.seek(pos, 0)
+            result = cls(length)
+            amount_read = fobj.readinto(result)
+            result[amount_read:] = []
+            return result
+        else:
+            return cls(fobj.read(length))
+
+
+    def tofile(self, fobj_or_filename, offset=None):
+        """
+        buf.tofile(fobj_or_filename[, offset])
+
+        Write the buf contents to a file or file-like object.
+        If a file-like object is given and offset is not None, the object's seek() method will be called.
+        If a filename is given:
+            - If offset is not specified or None, an existing file will be replaced;
+            - Otherwise, the file will be opened for updating and contents at the specified offset
+              will be overwritten in-place.
+
+        If offset is negative it is counted from the end of the file.
+        If offset is set to "append", the contents will be appended to the end of the file.
+
+        >>> f = io.BytesIO()
+        >>> b = buf("hello world")
+        >>> b.tofile(f)
+        >>> print f.getvalue()
+        hello world
+        >>> _ = f.seek(0, 0)
+        >>> buf("Python").tofile(f, 6)
+        >>> print f.getvalue()
+        hello Python
+        """
+        if hasattr(fobj_or_filename, 'write'):
+            fobj = fobj_or_filename
+        else:
+            if offset is None:
+                fobj = open(fobj_or_filename, 'wb')
+            else:
+                fobj = open(fobj_or_filename, 'rb+')
+        if offset is not None:
+            if offset == 'append':
+                fobj.seek(0, 2)
+            elif offset < 0:
+                # Seek from EOF
+                fobj.seek(offset, 2)
+            else:
+                fobj.seek(offset, 1)
+        fobj.write(self)
+
+
 
