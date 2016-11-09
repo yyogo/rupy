@@ -21,8 +21,9 @@ except ImportError:
     def urandom(length):
         raise RuntimeError("No randomness source available")
 
-
-
+range = getattr(__builtins__, 'xrange', range)
+long = getattr(__builtins__, 'long', int)
+buffer = getattr(__builtins__, 'buffer', lambda x: x)
 
 _REV8 = tuple(int(bin(i)[2:].zfill(8)[::-1], 2) for i in range(256))
 _POPCNT = tuple(bin(i).count('1') for i in range(256))
@@ -46,13 +47,24 @@ class buf(bytearray):
 
     >>> buf(10)
     buf(hex='00000000000000000000')
-    >>> buf('hello')
-    buf(b'hello')
+    >>> str(buf('hello'))
+    'hello'
     >>> buf([1,2,3,4])
     buf(hex='01020304')
     >>> buf(hex="deadbeef")
     buf(hex='deadbeef')
     """
+
+    def _create_fill(self, width, pattern):
+        real_len = max(len(self), width)
+        if pattern is None:
+            return self.__class__(real_len)
+        if isinstance(pattern, int):
+            pattern = bytes([pattern])
+        times = (real_len + len(pattern) - 1) // len(pattern)
+        fill = self.__class__(pattern) * times
+        fill[real_len:] = []
+        return fill
 
     def capitalize(self):
         """
@@ -63,15 +75,15 @@ class buf(bytearray):
         """
         return self.__class__(super(buf, self).capitalize())
 
-    def center(self, width, fillchar=0):
+    def center(self, width, fill=None):
         """
-        B.center(width[, fillchar]) -> copy of B
+        B.center(width[, fill]) -> copy of B
 
         Return B centered in a string of length width.  Padding is
-        done using the specified fill character (default is a null byte).
+        done using the specified fill pattern (default is null byte).
         """
-        copy = self.__class__([fillchar]) * max(len(self), width)
-        start = (len(copy) - len(self)) / 2
+        copy = self._create_fill(width, fill)
+        start = (len(copy) - len(self)) // 2
         copy[start:start + len(self)] = self
         return copy
     
@@ -86,6 +98,9 @@ class buf(bytearray):
         if isinstance(sub, (int, long)):
             sub = chr(sub)
         return super(buf, self).count(sub, *args, **kwargs)
+
+    def copy(self):
+        return self[:]
 
     def expandtabs(self, *args, **kwargs):
         """
@@ -116,15 +131,15 @@ class buf(bytearray):
         """
         return self.__class__(super(buf, self).join(iterable_of_bytes))
 
-    def ljust(self, width, fillchar=0):
+    def ljust(self, width, fill=None):
         """
-        B.ljust(width[, fillchar]) -> copy of B
-        B.rpad(width[, fillchar]) -> copy of B  # alias
+        B.ljust(width[, fill]) -> copy of B
+        B.rpad(width[, fill]) -> copy of B  # alias
 
         Return B left justified (right padded) in a string of length width. Padding is
-        done using the specified fill character (default is null).
+        done using the specified fill pattern (default is null bytes).
         """
-        copy = self.__class__([fillchar]) * max(len(self), width)
+        copy = self._create_fill(width, fill)
         copy[:len(self)] = self
         return copy
 
@@ -170,16 +185,16 @@ class buf(bytearray):
         """
         return self.__class__(super(buf, self).replace(*args, **kwargs))
 
-    def rjust(self, width, fillchar=0):
+    def rjust(self, width, fill=None):
         """
-        B.rjust(width[, fillchar]) -> copy of B
-        B.lpad(width[, fillchar]) -> copy of B  # alias
+        B.rjust(width[, fill]) -> copy of B
+        B.lpad(width[, fill]) -> copy of B  # alias
 
         Return B right justified (left padded) in a string of length width. Padding is
-        done using the specified fill character (default is a null byte)
+        done using the specified fill pattern (default is null bytes).
         """
-        copy = self.__class__([fillchar]) * max(len(self), width)
-        copy[:len(self)] = self
+        copy = self._create_fill(width, fill)
+        copy[-len(self):] = self
         return copy
     lpad = rjust
 
@@ -323,10 +338,9 @@ class buf(bytearray):
     def __repr__(self): # real signature unknown; restored from __doc__
         """ x.__repr__() <==> repr(x) """
         if self.isprintable():
-            return "{}(b{!r})".format(self.__class__.__name__, str(self))
+            return "{}({!r})".format(self.__class__.__name__, bytes(self))
         else:
-            return "{}(hex='{}')".format(self.__class__.__name__, self.tohex())
-
+            return "{}(hex='{}')".format(self.__class__.__name__, self.hex())
 
     def __rmul__(self, n): # real signature unknown; restored from __doc__
         """ x.__rmul__(n) <==> n*x """
@@ -353,25 +367,20 @@ class buf(bytearray):
 
         Construct a zero-initialized buf of the given length.
         """
-        hex = kwargs.pop('hex', None)
+        hex_string = kwargs.pop('hex', None)
 
-        if ('source' in kwargs or len(args) > 0) and hex is not None:
-            raise ValueError("can't supply both `source` and `hex`")
-
-        if hex is not None:
-            hex = re.sub('\s+', '', hex, flags=re.S)
-            source = binascii.unhexlify(hex)
+        if hex_string is not None:
+            if 'source' in kwargs or len(args) > 0:
+                raise ValueError("can't supply both `source` and `hex`")
+            hex_string = re.sub('\s+', '', hex_string, flags=re.S)
+            source = binascii.unhexlify(hex_string)
             super(buf, self).__init__(source, *args, **kwargs)
         else:
             super(buf, self).__init__(*args, **kwargs)
 
-
-    def __hex__(self):
-        return self.tohex()
-
-    def tohex(self, uppercase=False):
+    def hex(self, uppercase=False):
         """
-        b.tohex([uppercase=False]) -> str
+        b.hex([uppercase=False]) -> str
 
         Convert the buf to hexadecimal representation..
         """
@@ -397,25 +406,25 @@ class buf(bytearray):
         return not self.translate(bytearray(range(256)), string.printable)
 
 
-    def toint(self, little_endian=True, signed=False):
+    def to_int(self, byteorder='little', signed=False):
         """
-        b.toint([little_endian=True[, signed=True]])
+        b.toint([byteorder='little'[, signed=False]])
 
         Convert bytes to integer.
         This function is made to be behaviorally compatible with Python 3's int.from_bytes.
 
-        >>> buf(hex='1234').toint() == 0x3412
+        >>> buf(hex='1234').to_int() == 0x3412
         True
-        >>> buf(hex='ffffffff').toint(signed=False) == 0xffffffff
+        >>> buf(hex='ffffffff').to_int(signed=False) == 0xffffffff
         True
-        >>> buf(hex='ffffffff').toint(signed=True) == -1
+        >>> buf(hex='ffffffff').to_int(signed=True) == -1
         True
         """
         bl = self[::]
-        if little_endian:
+        if byteorder == 'little':
             bl.reverse()
 
-        val = 0L
+        val = long(0)
         for b in bl:
             val <<= 8
             val |= b
@@ -428,7 +437,7 @@ class buf(bytearray):
         return val
 
     @classmethod
-    def fromint(cls, n, size=None, little_endian=True, signed=False):
+    def from_int(cls, n, size=None, byteorder='little', signed=False):
         """
         buf.fromint(n[, size[, little_endian=True[, signed=False]]])
 
@@ -437,9 +446,9 @@ class buf(bytearray):
         (By default the size is the minimum possible).
         This function is made to be behaviorally compatible with Python 3's int.to_bytes.
 
-        >>> buf.fromint(0x1234)
+        >>> buf.from_int(0x1234)
         buf(hex='3412')
-        >>> buf.fromint(1, 4, False)
+        >>> buf.from_int(1, 4, 'big')
         buf(hex='00000001')
         """
         bl = max(n.bit_length(), 1)
@@ -460,7 +469,7 @@ class buf(bytearray):
 
         bl = cls(size)
 
-        if little_endian:
+        if byteorder == 'little':
             it = range(size)
         else:
             it = range(size - 1, -1, -1)
@@ -471,12 +480,12 @@ class buf(bytearray):
         return bl
 
     def __long__(self):
-        """ long(b) <==> b.__long__() <==> b.toint()"""
-        return self.toint()
+        """ long(b) <==> b.__long__() <==> b.to_int()"""
+        return self.to_int()
 
     def __int__(self):
-        """ int(b) <==> b.__int__() <==> b.toint()"""
-        return self.toint()
+        """ int(b) <==> b.__int__() <==> b.to_int()"""
+        return self.to_int()
 
     def __xor__(self, other):
         """ b.__xor__(y) <==> b ^ y"""
@@ -513,19 +522,19 @@ class buf(bytearray):
         Return a HexDump object of the buf
 
         >>> b = buf(hex='68656c6c6f20776f726c64211337abcd')
-        >>> print b.hexdump()
+        >>> print(b.hexdump())
         000000| 6865 6c6c 6f20 776f  726c 6421 1337 abcd |hello world!.7..|
         """
         return HexDump(self, *args, **kwargs)
 
     @classmethod
-    def random(cls, size=None):
+    def random(cls, size):
         """
         buf.random(size) -> buf
 
         Returns a randomized buf of the given size.
         >>> x = buf.random(1024)
-        >>> print len(x)
+        >>> print(len(x))
         1024
         >>> # This test isn't deterministic but is very likely and a good measure of uniformity
         >>> all(x.count(b) < 20 for b in range(256))
@@ -545,40 +554,43 @@ class buf(bytearray):
 
         Returns a generator of blocks, each one with the specified blocksize,
         optionally right-padded with the specified fillchar.
-        >>> g = buf('aaaabbbbccccdd').blocks(4)
+        >>> g = buf(b'aaaabbbbccccdd').blocks(4)
         >>> for x in g:
-        ...    print x
+        ...    print(x)
         aaaa
         bbbb
         cccc
         dd
 
-        >>> g = buf('something completely different').blocks(8, 'x')
+        >>> g = buf(b'something completely different').blocks(8, b'x')
         >>> for x in g:
-        ...    print x
+        ...    print(x)
         somethin
         g comple
         tely dif
         ferentxx
         """
         if fillchar is None:
-            return (self[i:i+blocksize] for i in xrange(0, len(self), blocksize))
+            return (self[i:i+blocksize] for i in range(0, len(self), blocksize))
         else:
-            return (self[i:i+blocksize].rpad(blocksize, fillchar) for i in xrange(0, len(self), blocksize))
+            return (self[i:i+blocksize].rpad(blocksize, fillchar) for i in range(0, len(self), blocksize))
 
-    def unpack(self, fmt, offset=0):
+    def unpack(self, fmt, offset=None):
         """
         b.unpack(fmt[, offset]) -> tuple
 
         Unpack binary values according to fmt, optionally starting from offset.
 
         >>> b = buf(hex="12345678abcd")
-        >>> print b.unpack('<HHH')
+        >>> print(b.unpack('<HHH'))
         (13330, 30806, 52651)
         >>> b.unpack('<L', 2) == (3450566742,)
         True
         """
-        return struct.unpack_from(fmt, self, offset)
+        if offset is None:
+            return struct.unpack(fmt, buffer(self))
+        else:
+            return struct.unpack_from(fmt, self, offset)
 
     @classmethod
     def pack(cls, fmt, *values):
@@ -588,9 +600,9 @@ class buf(bytearray):
         Pack values into a new buf accroding to fmt.
 
         >>> b = buf.pack('>L', 0xdeadbeef)
-        >>> hex(b) == "deadbeef"
+        >>> b.hex() == "deadbeef"
         True
-        >>> print buf.pack('5c', 'h', 'e', 'l', 'l', 'o')
+        >>> print(buf.pack('5c', b'h', b'e', b'l', b'l', b'o'))
         hello
         """
         res = cls(struct.calcsize(fmt))
@@ -609,25 +621,20 @@ class buf(bytearray):
         If strict is True, total sizes must match.
 
         >>> b = buf(hex='deadbeefaabbccdd01234567')
-        >>> s = b.fields("x:uint32  y:uint32b  z:Bytes[4]")
+        >>> s = b.fields("x: uint32  y: uint32b  z: Bytes[4]")
         >>> s.x == 0xefbeadde
         True
         >>> s.z == buf(hex='01234567')
         True
         >>> s.y = 0xcafebabe
-        >>> print hex(b)
+        >>> print(b.hex())
         deadbeefcafebabe01234567
         >>> b.fields("uint16b", 2)[0] = 0xd00d
-        >>> print hex(b)
+        >>> print(b.hex())
         deadd00dcafebabe01234567
         """
 
         from rupy import fields
-        if isinstance(fieldspec, str):
-            # convenience, allows writing stuff like "a:int32 b:int64 c:Bytes(16)" etc.
-            #TODO Improve this silly DSL to support nested stuff (really?..)
-            fieldspec = [tuple(x.split(':',1)) if ':' in x else x for x in fieldspec.split()]
-
         map = fields.FieldMap(fieldspec)
         data = memoryview(self)[offset:offset + map.size]
         if strict and len(data) != map.size:
@@ -641,9 +648,9 @@ class buf(bytearray):
 
         Return a BitView object of the buffer. See BitView's docstring.
         >>> b = buf(hex='aa55')
-        >>> print b.bits
+        >>> print(b.bits)
         1010101001010101
-        >>> print b.bits[4:-4]
+        >>> print(b.bits[4:-4])
         10100101
         >>> b.bits.invert()
         >>> b
@@ -685,17 +692,17 @@ class buf(bytearray):
         return _crc32(buffer(self))
 
     @classmethod
-    def fromfile(cls, fobj_or_filename, length=None, offset=0):
+    def from_file(cls, fobj_or_filename, length=None, offset=0):
         """
         buf.fromfile(fobj_or_filename[, length[, offset=0]]) -> buf
 
         Read data from file or file-like object into a new buf.
 
         >>> f = io.BytesIO("Norwegian Blue")
-        >>> print buf.fromfile(f, 9)
+        >>> print(buf.from_file(f, 9))
         Norwegian
         >>> _ = f.seek(0, 0)
-        >>> print buf.fromfile(f, offset=10)
+        >>> print(buf.from_file(f, offset=10))
         Blue
         """
         if hasattr(fobj_or_filename, 'read') or hasattr(fobj_or_filename, 'readinto'):
@@ -721,7 +728,7 @@ class buf(bytearray):
             return cls(fobj.read(length))
 
 
-    def tofile(self, fobj_or_filename, offset=None):
+    def to_file(self, fobj_or_filename, offset=None):
         """
         buf.tofile(fobj_or_filename[, offset])
 
@@ -737,12 +744,12 @@ class buf(bytearray):
 
         >>> f = io.BytesIO()
         >>> b = buf("hello world")
-        >>> b.tofile(f)
-        >>> print f.getvalue()
+        >>> b.to_file(f)
+        >>> print(f.getvalue())
         hello world
         >>> _ = f.seek(0, 0)
-        >>> buf("Python").tofile(f, 6)
-        >>> print f.getvalue()
+        >>> buf("Python").to_file(f, 6)
+        >>> print(f.getvalue())
         hello Python
         """
         if hasattr(fobj_or_filename, 'write'):
@@ -761,6 +768,5 @@ class buf(bytearray):
             else:
                 fobj.seek(offset, 1)
         fobj.write(self)
-
 
 

@@ -1,9 +1,11 @@
+from __future__ import print_function
 from rupy.buf import buf
 import struct
 import re
 
 import operator
 
+range = globals().get("xrange", range)
 
 class BasicField(object):
     def __init__(self, fmt):
@@ -60,12 +62,12 @@ class FieldView(object):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return tuple(self[i] for i in xrange(*item.indices(len(self))))
+            return tuple(self[i] for i in range(*item.indices(len(self))))
         return self._fieldset.get(self.__buffer__, item)
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
-            r = xrange(key.indices(len(self)))
+            r = range(key.indices(len(self)))
             if len(value) != len(r):
                 raise ValueError("mismatched value count in field assignment")
             for i, x in zip(r, value):
@@ -116,19 +118,127 @@ def getter(i):
 def setter(i):
     return lambda x, v: operator.setitem(x, i, v)
 
+__all__ = ["uint8", "byte", "int8", "char",
+           "uint16", "uint16l", "uint32",
+           "uint32l", "uint64", "uint64l",
+           "uint16b", "uint32b", "uint64b",
+           "int16", "int16l", "int32", "int32l",
+           "int64", "int64l", "int16b", "int32b",
+           "int64b", "FieldSet", "FieldMap", "Bytes", "Array"]
 
-def parse_field_spec(s):
-    if s in globals():
-        return globals()[s]
-    m = re.match(r'(\w+)\(([0-9]+)\)', s)
-    if m:
-        name, value = m.groups()
-        return globals()[name](int(value))
-    m = re.match(r'(\w+)\[([0-9]+)\]', s)
-    if m:
-        name, value = m.groups()
-        return Array(globals()[name], int(value))
-    raise ValueError("Invalid field specification")
+def parse_dsl(s):
+    """
+    I'm a horrible person
+    """
+    # tokenize
+    tokens, leftover = re.Scanner(
+        [
+            (r'[a-zA-Z_]\w*', lambda s, m: ('name', m)),
+            (r'\d+', lambda s, m: ('literal', int(m))),
+            (r'[\(\[\{]', lambda s,m :('bracket_open', m)),
+            (r'[\)\]\}]', lambda s,m :('bracket_close', m)),
+            (r'\:', ('op_colon', None)),
+            (r'\s+', None),
+        ]
+    ).scan(s)
+    if leftover:
+        raise ValueError("Syntax error in fieldspec: invalid token at %d" % (len(s) - len(leftover)))
+
+    matching_bracket = {'(': ')', '[': ']', '{': '}'}
+    def bracketeer(it, btype=None):
+        level = []
+        for token, value in it:
+            if token == 'bracket_open':
+                level.append(bracketeer(it, value))
+            elif token == 'bracket_close':
+                if value != matching_bracket[btype]:
+                    raise ValueError("Syntax error in fieldspec: mismatched brackets")
+                return ('brackets%s' % btype, level)
+            else:
+                level.append((token, value))
+        if btype is not None:
+            raise ValueError("Syntax error in fieldspec: unmatched brackets")
+        return level
+
+    tokens = bracketeer(iter(tokens))
+    # top level is by default a {}
+    if len(tokens) == 1 and tokens[0][0] == 'brackets{':
+        tokens = tokens[0][1]
+
+    def colonize(tokens):
+        # handle colons
+        last = None
+        res = []
+        it = iter(tokens)
+        for (token, value) in it:
+            if token == 'op_colon':
+                try:
+                    ftype = next(it)
+                except StopIteration:
+                    raise ValueError("Error in fieldspec: no field type specified")
+                if last is None:
+                    raise ValueError("Error in fieldspec: no field name specified")
+                if last[0] != 'name':
+                    raise ValueError("Invalid field name")
+                fname = last[1]
+                last = None
+            else:
+                # last one may have been a nameless field
+                fname = None
+                ftype = last
+                last = token, value
+            res.append((fname, ftype))
+        if last is not None:
+            # last member is nameless
+            res.append((None, last))
+
+        res2 = []
+        for fname, ftype in res:
+            if ftype is None:
+                continue
+            if ftype[0] == 'name':
+                field = TYPES[ftype[1]]
+            elif ftype[0] == 'fieldtype':
+                field = ftype[1]
+            elif ftype[0] == 'literal':
+                field = Bytes(ftype[1])
+            else:
+                raise ValueError("Error in fieldspec: invalid field type ({!r})".format(ftype))
+            res2.append((fname, field))
+        return res2
+
+    def groupy(tokens):
+        last = None
+        res = []
+        for t, v in tokens:
+            if t == 'brackets[' or t == 'brackets(':
+                # check internal
+                if len(v) != 1 or v[0][0] != 'literal':
+                    raise ValueError("Error in fieldspec: invalid array")
+                if len(res) == 0:
+                    raise ValueError("Error in fieldspec: no field to make array of")
+                last = res.pop(-1)
+                if last[0] == 'name':
+                    field = TYPES[last[1]]
+                elif last[0] == 'fieldtype':
+                    field = last[1]
+                else:
+                    raise ValueError("Invalid array type")
+
+                if field == Bytes:
+                    arr = Bytes(v[0][1])
+                else:
+                    arr = Array(field,  v[0][1])
+                res.append(('fieldtype', arr))
+            elif t == 'brackets{':
+                result = groupy(v)
+                res.append(('fieldtype', result))
+            else:
+                res.append((t, v))
+        return colonize(res)
+
+
+    return groupy(tokens)
 
 
 class FieldMap(FieldSet):
@@ -141,6 +251,9 @@ class FieldMap(FieldSet):
         name_l = []
         properties = {}
 
+        if isinstance(fieldspec, str):
+            fieldspec = parse_dsl(fieldspec)
+
         for i, v in enumerate(fieldspec):
             if isinstance(v, tuple):
                 k, v = v
@@ -149,9 +262,16 @@ class FieldMap(FieldSet):
             if isinstance(v, list):
                 v = FieldMap(v)
             elif isinstance(v, str):
-                # Allow using fields without direct import
-                v = parse_field_spec(v)
-            elif isinstance(v, (int, long)):
+                v = parse_dsl(v)
+                if len(v) != 1:
+                    raise ValueError("Invalid field value")
+                k2, v= v[0]
+                if k2 is not None:
+                    if k is not None:
+                        raise ValueError("Field named twice")
+                    k = k2
+
+            elif isinstance(v, int):
                 v = Bytes(v)
             fields.append(v)
             if k is not None:
@@ -177,19 +297,20 @@ class FieldMap(FieldSet):
         super(FieldMap, self).__init__(fields)
         self._bound = type("BoundFieldMap", (self._bound, ), properties)
 
+TYPES = {x: globals()[x] for x in __all__}
 
 if __name__ == '__main__':
     test = bytearray.fromhex('1234567890abcdef'*3)
     f = FieldMap([("a", uint16), ("b", uint32), ("c", uint64), ("d", Bytes(10))])
     x = f.unpack(test)
-    print x[::]
-    print (x.a, x.b, x.c, x.d)
+    print(x[::])
+    print((x.a, x.b, x.c, x.d))
 
     f2 = FieldMap([("x", uint16), ("y", uint16), ("z", f)])
-    test2 = bytearray("AABB") + test
+    test2 = bytearray(b"AABB") + test
     y = f2.unpack(test2)
-    print y[::]
-    print y.x, y.y, y.z, y.z.a, y.z.b, y.z.c
+    print(y[::])
+    print((y.x, y.y, y.z, y.z.a, y.z.b, y.z.c))
 
     f3 = FieldMap([
         ('foo', int16),
@@ -201,7 +322,7 @@ if __name__ == '__main__':
             ("d", Bytes(10)),
         ])
     ])
-    print f3.unpack(test2)
+    print(f3.unpack(test2))
 
     f4 = FieldMap([
         ('foo', 'int16[2]'),
@@ -212,12 +333,21 @@ if __name__ == '__main__':
             ("d", 'Bytes(10)'),
         ]
     ])
-    print f4.unpack(test2)
 
-__all__ = ["uint8", "byte", "int8", "char",
-           "uint16", "uint16l", "uint32",
-           "uint32l", "uint64", "uint64l",
-           "uint16b", "uint32b", "uint64b",
-           "int16", "int16l", "int32", "int32l",
-           "int64", "int64l", "int16b", "int32b",
-           "int64b", "FieldSet", "FieldMap", "Bytes", "Array"]
+
+    print(f4.unpack(test2))
+
+    f5 = FieldMap("""
+        foo: int16[2]
+        {
+            a: uint16
+            uint32
+            c: uint64
+            d: Bytes(10)
+        }
+    """)
+
+    print(f5.unpack(test2))
+
+
+
