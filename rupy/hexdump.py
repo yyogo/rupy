@@ -1,6 +1,7 @@
 __author__ = "rumbah"
+from rupy.compat import *
 
-
+@compatible
 class HexDump(object):
     """
     HexDump(data, width=16, groups=(2,4), prefix='')
@@ -17,6 +18,7 @@ class HexDump(object):
     fmt = u'{self.prefix}{offset:06x}| {dump} |{asc:{self.width}}|'
     snipfmt = u'{self.prefix}...    [0x{bytes:x} hidden bytes]'
     dupfmt = u'{self.prefix}***    [0x{lines:x} duplicate lines]'
+    ascii_trans = bytearray(x if 32 <= x < 127 else b'.'[0] for x in range(256))
 
     def __init__(self, data, width=16, groups=(2, 4), prefix=''):
         self.data = data
@@ -28,7 +30,7 @@ class HexDump(object):
         pattern = [u'{}'] * self.width
         for g in groups:
             pattern = [''.join(pattern[i:i + g]) +
-                       ' ' for i in xrange(0, width, g)]
+                       ' ' for i in range(0, width, g)]
         self._dump_fmt_pattern = ''.join(pattern).strip()
         self._dump_fmt = self._dump_fmt_pattern.format(
             *([u'{:02x}'] * self.width))
@@ -37,16 +39,16 @@ class HexDump(object):
         """ len(hd) <=> hd.__len__
         Return the number of lines in the hexdump
         """
-        return (self.length + self.width - 1) / self.width
+        return (self.length + self.width - 1) // self.width
 
     def _format_line(self, offset, data):
         data = bytearray(data)
         if len(data) < self.width:  # partial line
             dump_fmt = self._dump_fmt_pattern.format(
-                *([u'{:02x}'] * len(data) + ['  '] * (self.width - len(data))))
+                *([u'{:02x}'] * len(data) + [u'  '] * (self.width - len(data))))
         else:
             dump_fmt = self._dump_fmt
-        asc = bytearray(x if 32 <= x < 127 else '.' for x in data)
+        asc = data.translate(self.ascii_trans).decode('ascii')
         return self.fmt.format(
             offset=offset, dump=dump_fmt.format(*data), asc=asc, self=self)
 
@@ -59,7 +61,7 @@ class HexDump(object):
                 raise IndexError(offset)
             return self._format_line(offset, self._mv[offset:offset+self.width])
         else:
-            return [self[i] for i in xrange(*index.indices(len(self)))]
+            return [self[i] for i in range(*index.indices(len(self)))]
 
     def dump(self, snip=None, skip_dups=False):
         """ Get a formatted dump.
@@ -79,12 +81,12 @@ class HexDump(object):
         skipped = False
         lines = []
         i = 0
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             l = self._mv[i * self.width:(i + 1) * self.width]
             if l == last and skip_dups:
                 if skipped == 0:
                     lines.append(None)  # some guard thing
-                skipped +=1
+                skipped += 1
                 continue
             else:
                 if skipped > 0:
@@ -110,8 +112,7 @@ class HexDump(object):
         return self.dump(snip, skip_dups)
 
     def __bytes__(self):
-        return unicode(self).encode('ascii')
-    __str__ = __bytes__
+        return self.dump().encode('ascii')
 
     def __unicode__(self):
         return self.dump()

@@ -1,7 +1,6 @@
 import itertools
+from rupy.compat import *
 
-range = getattr(__builtins__, "xrange", range)
-long = getattr(__builtins__, "long", int)
 
 class BitView(object):
     def __init__(self, object, start=None, stop=None, step=None):

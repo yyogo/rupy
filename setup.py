@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='rupy',
-    version='0.1a',
+    version='0.2a',
     packages=['rupy'],
     url='',
     license='',

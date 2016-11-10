@@ -1,11 +1,12 @@
 from __future__ import print_function
-from rupy.buf import buf
 import struct
 import re
 
 import operator
 
-range = globals().get("xrange", range)
+from rupy.buf import buf
+from rupy.compat import *
+
 
 class BasicField(object):
     def __init__(self, fmt):
@@ -144,8 +145,9 @@ def parse_dsl(s):
     if leftover:
         raise ValueError("Syntax error in fieldspec: invalid token at %d" % (len(s) - len(leftover)))
 
-    matching_bracket = {'(': ')', '[': ']', '{': '}'}
+    matching_bracket = {'(': ')', '[': ']', '{': '}', None: None}
     def bracketeer(it, btype=None):
+        """ Group by brackets (recursively) """
         level = []
         for token, value in it:
             if token == 'bracket_open':
@@ -166,10 +168,14 @@ def parse_dsl(s):
         tokens = tokens[0][1]
 
     def colonize(tokens):
-        # handle colons
+        # handle colons and named fields etc.
         last = None
         res = []
         it = iter(tokens)
+
+        # iterate over tokens, save each one
+        # if it is followed by a colon - get the next token and pair them
+        # if not, save it as a nameless field
         for (token, value) in it:
             if token == 'op_colon':
                 try:
@@ -193,14 +199,18 @@ def parse_dsl(s):
             res.append((None, last))
 
         res2 = []
+        # Parse field types
         for fname, ftype in res:
             if ftype is None:
                 continue
             if ftype[0] == 'name':
+                # Type is a name, get it from the list
                 field = TYPES[ftype[1]]
             elif ftype[0] == 'fieldtype':
+                # Type is complex, use it
                 field = ftype[1]
             elif ftype[0] == 'literal':
+                # Literal number as shorthand for byte field
                 field = Bytes(ftype[1])
             else:
                 raise ValueError("Error in fieldspec: invalid field type ({!r})".format(ftype))
@@ -208,11 +218,12 @@ def parse_dsl(s):
         return res2
 
     def groupy(tokens):
+        # Handle arrays and complex types
         last = None
         res = []
         for t, v in tokens:
             if t == 'brackets[' or t == 'brackets(':
-                # check internal
+                # Field is an array
                 if len(v) != 1 or v[0][0] != 'literal':
                     raise ValueError("Error in fieldspec: invalid array")
                 if len(res) == 0:
@@ -343,7 +354,7 @@ if __name__ == '__main__':
             a: uint16
             uint32
             c: uint64
-            d: Bytes(10)
+            d: Bytes(10).
         }
     """)
 

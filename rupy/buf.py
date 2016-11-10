@@ -3,11 +3,12 @@ import re
 import string
 import binascii
 import struct
-
-from rupy.bitview import BitView
 import itertools
 
+from rupy.bitview import BitView
 from rupy.hexdump import HexDump
+
+from rupy.compat import *
 
 try:
     from zlib import crc32 as _crc32
@@ -21,13 +22,12 @@ except ImportError:
     def urandom(length):
         raise RuntimeError("No randomness source available")
 
-range = getattr(__builtins__, 'xrange', range)
-long = getattr(__builtins__, 'long', int)
-buffer = getattr(__builtins__, 'buffer', lambda x: x)
+
 
 _REV8 = tuple(int(bin(i)[2:].zfill(8)[::-1], 2) for i in range(256))
 _POPCNT = tuple(bin(i).count('1') for i in range(256))
 
+@compatible
 class buf(bytearray):
     """
     buf(iterable_of_ints) -> buf.
@@ -47,7 +47,7 @@ class buf(bytearray):
 
     >>> buf(10)
     buf(hex='00000000000000000000')
-    >>> str(buf('hello'))
+    >>> str(buf(b'hello'))
     'hello'
     >>> buf([1,2,3,4])
     buf(hex='01020304')
@@ -86,7 +86,7 @@ class buf(bytearray):
         start = (len(copy) - len(self)) // 2
         copy[start:start + len(self)] = self
         return copy
-    
+
     def count(self, sub, *args, **kwargs):
         """
         B.count(sub [,start [,end]]) -> int
@@ -96,7 +96,7 @@ class buf(bytearray):
         as in slice notation.
         """
         if isinstance(sub, (int, long)):
-            sub = chr(sub)
+            sub = bytearray((sub,))
         return super(buf, self).count(sub, *args, **kwargs)
 
     def copy(self):
@@ -338,7 +338,7 @@ class buf(bytearray):
     def __repr__(self): # real signature unknown; restored from __doc__
         """ x.__repr__() <==> repr(x) """
         if self.isprintable():
-            return "{}({!r})".format(self.__class__.__name__, bytes(self))
+            return "{}({})".format(self.__class__.__name__, ascii(bytes(self)))
         else:
             return "{}(hex='{}')".format(self.__class__.__name__, self.hex())
 
@@ -384,9 +384,12 @@ class buf(bytearray):
 
         Convert the buf to hexadecimal representation..
         """
-        res = binascii.hexlify(self)
+        if hasattr(bytearray, "hex"):
+            res = bytearray.hex(self)
+        else:
+            res = binascii.hexlify(self)
         if uppercase:
-            res = res.upper()
+            return res.upper()
         return res
 
     def issimpleascii(self):
@@ -403,38 +406,56 @@ class buf(bytearray):
 
         Returns True if b is composed of printable ASCII characters (string.printable).
         """
-        return not self.translate(bytearray(range(256)), string.printable)
+        return not self.translate(bytearray(range(256)), string.printable.encode("ascii"))
 
+    if hasattr(int, 'to_bytes') and hasattr(int, 'from_bytes'):
+        # yay Python 3 :)
+        @classmethod
+        def _from_int(cls, n, size, byteorder, signed):
+            return cls(int.to_bytes(n, size, byteorder, signed=signed))
 
-    def to_int(self, byteorder='little', signed=False):
-        """
-        b.toint([byteorder='little'[, signed=False]])
+        def _to_int(self, byteorder, signed):
+            return int.from_bytes(self, byteorder, signed=signed)
+    else:
+        # No python 3 cool stuff :(
+        @classmethod
+        def _from_int(cls, n, size, byteorder, signed):
+            if not signed and n < 0:
+                raise OverflowError("can't convert negative int to unsigned")
+            if size * 8 < n.bit_length() + signed:
+                raise OverflowError("int too big to convert")
 
-        Convert bytes to integer.
-        This function is made to be behaviorally compatible with Python 3's int.from_bytes.
+            if signed and n < 0:
+                n += (1 << (size * 8))
 
-        >>> buf(hex='1234').to_int() == 0x3412
-        True
-        >>> buf(hex='ffffffff').to_int(signed=False) == 0xffffffff
-        True
-        >>> buf(hex='ffffffff').to_int(signed=True) == -1
-        True
-        """
-        bl = self[::]
-        if byteorder == 'little':
-            bl.reverse()
+            bl = cls(size)
 
-        val = long(0)
-        for b in bl:
-            val <<= 8
-            val |= b
+            if byteorder == 'little':
+                it = range(size)
+            else:
+                it = range(size - 1, -1, -1)
 
-        if signed:
-            bl = (val.bit_length() + 7) / 8 * 8
-            if val & (1 << (bl - 1)):
-                return -((1 << bl) - val)
+            for i in it:
+                bl[i] = n & 0xff
+                n >>= 8
+            return bl
 
-        return val
+        def _to_int(self, byteorder, signed):
+            bl = self[::]
+            if byteorder == 'little':
+                bl.reverse()
+
+            val = long(0)
+            for b in bl:
+                val <<= 8
+                val |= b
+
+            if signed:
+                bl = (val.bit_length() + 7) / 8 * 8
+                if val & (1 << (bl - 1)):
+                    return -((1 << bl) - val)
+
+            return val
 
     @classmethod
     def from_int(cls, n, size=None, byteorder='little', signed=False):
@@ -451,33 +472,27 @@ class buf(bytearray):
         >>> buf.from_int(1, 4, 'big')
         buf(hex='00000001')
         """
-        bl = max(n.bit_length(), 1)
-        if not signed and n < 0:
-            raise OverflowError("can't convert negative int to unsigned")
-        if signed:
-            bl += 1
-
-        rsize = (bl + 7) / 8
-
         if size is None:
-            size = rsize
-        elif size < rsize:
-            raise OverflowError("int too big to convert")
+            bl = max(n.bit_length(), 1) + bool(signed)
+            size = (bl + 7) // 8
+        return cls._from_int(n, size, byteorder, signed)
 
-        if signed and n < 0:
-            n += (1 << (size * 8))
+    def to_int(self, byteorder='little', signed=False):
+        """
+        b.toint([byteorder='little'[, signed=False]])
 
-        bl = cls(size)
+        Convert bytes to integer.
+        This function is made to be behaviorally compatible with Python 3's int.from_bytes.
 
-        if byteorder == 'little':
-            it = range(size)
-        else:
-            it = range(size - 1, -1, -1)
+        >>> buf(hex='1234').to_int() == 0x3412
+        True
+        >>> buf(hex='ffffffff').to_int(signed=False) == 0xffffffff
+        True
+        >>> buf(hex='ffffffff').to_int(signed=True) == -1
+        True
+        """
+        return self._to_int(byteorder, signed)
 
-        for i in it:
-            bl[i] = n & 0xff
-            n >>= 8
-        return bl
 
     def __long__(self):
         """ long(b) <==> b.__long__() <==> b.to_int()"""
@@ -514,6 +529,9 @@ class buf(bytearray):
     def __invert__(self):
         """ b.__invert__() <==> ~b """
         return self.__class__((~x) & 0xff for x in self)
+
+    def __unicode__(self):
+        return self.decode("ascii")
 
     def hexdump(self, *args, **kwargs):
         """
@@ -698,7 +716,7 @@ class buf(bytearray):
 
         Read data from file or file-like object into a new buf.
 
-        >>> f = io.BytesIO("Norwegian Blue")
+        >>> f = io.BytesIO(b"Norwegian Blue")
         >>> print(buf.from_file(f, 9))
         Norwegian
         >>> _ = f.seek(0, 0)
@@ -707,9 +725,9 @@ class buf(bytearray):
         """
         if hasattr(fobj_or_filename, 'read') or hasattr(fobj_or_filename, 'readinto'):
             fobj = fobj_or_filename
-            if isinstance(fobj, file):
+            if not isinstance(fobj, io.IOBase) and hasattr(fobj, 'fileno'):
                 # default file object's readinto() is bad, m'kay?
-                fobj = io.open(fobj.fileno(), fobj.mode)
+                fobj = io.open(fobj.fileno(), getattr(fobj, "mode", "rb"))
         else:
             fobj = io.open(fobj_or_filename, 'rb')
         fobj.seek(offset, 1)
@@ -743,14 +761,14 @@ class buf(bytearray):
         If offset is set to "append", the contents will be appended to the end of the file.
 
         >>> f = io.BytesIO()
-        >>> b = buf("hello world")
+        >>> b = buf(b"hello world")
         >>> b.to_file(f)
-        >>> print(f.getvalue())
-        hello world
+        >>> f.getvalue() == b'hello world'
+        True
         >>> _ = f.seek(0, 0)
-        >>> buf("Python").to_file(f, 6)
-        >>> print(f.getvalue())
-        hello Python
+        >>> buf(b"Python").to_file(f, 6)
+        >>> f.getvalue() == b'hello Python'
+        True
         """
         if hasattr(fobj_or_filename, 'write'):
             fobj = fobj_or_filename
