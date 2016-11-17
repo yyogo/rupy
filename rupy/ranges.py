@@ -132,9 +132,9 @@ class Range(object):
             start, stop, step = kwargs.pop('start', None), kwargs.pop('stop', None), kwargs.pop('step', None)
             if kwargs:
                 raise TypeError("Range() got an unexpected keyword argument %r" % iter(kwargs.keys()).next())
-        self.start = start if start is not None else 0
-        self.step = step
-        self.stop = stop if step is not None else 1
+        self.start = start = start if start is not None else 0
+        self.step = step = step if step is not None else 1
+        self.stop = stop
         if step == 0:
             raise ValueError("Invalid step value")
         if stop is not None:
@@ -142,7 +142,8 @@ class Range(object):
                 self.stop = max(stop, start)
             else:
                 self.stop = min(stop, start)
-            self.stop = self[-1] + self.step
+            if len(self) > 0:
+                self.stop = self[-1] + self.step
 
 
     def _get(self, idx):

@@ -7,7 +7,7 @@ class BitView(object):
     def __init__(self, obj, start=None, stop=None, step=None):
         self.__buffer__ = obj
         self.slice = slice(start, stop, step)
-        self._range = Range[self.slice]
+        self._range = Range(*self.slice.indices(len(obj) * 8))
 
     def _get(self, idx):
         return (self.__buffer__[idx // 8] >> ((idx ^ 7) & 7)) & 1
