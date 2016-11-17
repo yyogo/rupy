@@ -38,7 +38,7 @@ import itertools
 # The metaclass is used to support indexing syntax (ugly hack but pretty results!)
 class RangeMeta(type):
     def __getitem__(cls, item):
-        if isinstance(item, slice):
+        if isinstance(item, (slice, Range)):
             start, stop, step = item.start, item.stop, item.step
             return cls(start, stop, step)
         elif isinstance(item, tuple):
@@ -100,16 +100,25 @@ class Range(object):
 
     You can use series notation to define ranges, e.g:
 
-    Range[1, 2, ..., 10] <=> Range(1, 11)
-    Range[0, 3, ...] <=> Range(start=0, stop=None, step=3)
-    Range[1, 2, 3, 4, 5] <=> Range(1, 6)
+    >>> Range[1, 2, ..., 10] == Range(1, 11)
+    True
+    >>> Range[0, 3, ...] == Range(start=0, stop=None, step=3)
+    True
+    >>> Range[1, 2, 3, 4, 5] == Range(1, 6)
+    True
+
+    Ranges can be sliced, shifted (using addition) and "stretched" (using multiplication):
+    >>> Range[1,2,...,100][1:20:2] == Range[2,4,...,20]
+    True
+    >>> Range[2,4,6,...] * 2 == Range[4,8,12,...]
+    True
     """
     __metaclass__ = RangeMeta  # For slice-style range creation
 
     def __init__(self, *args, **kwargs):
         if args and kwargs:
             raise TypeError("Can supply either postitional arguments (range()-style) or keywords, not both")
-        start, stop, step = 0, None, 1
+        start, stop, step = None, None, None
         if args:
             if len(args) == 1:
                 stop, = args
@@ -120,16 +129,20 @@ class Range(object):
             elif len(args) > 3:
                 raise TypeError("Range() expects up to 3 positional arguments")
         elif kwargs:
-            start, stop, step = kwargs.pop('start', 0), kwargs.pop('stop', None), kwargs.pop('step', 1)
+            start, stop, step = kwargs.pop('start', None), kwargs.pop('stop', None), kwargs.pop('step', None)
             if kwargs:
                 raise TypeError("Range() got an unexpected keyword argument %r" % iter(kwargs.keys()).next())
-        self.start = start
+        self.start = start if start is not None else 0
         self.step = step
-        self.stop = stop
-        if step > 0 and stop is not None:
-            self.stop = max(stop, start)
-        else:
-            self.stop = min(stop, start)
+        self.stop = stop if step is not None else 1
+        if step == 0:
+            raise ValueError("Invalid step value")
+        if stop is not None:
+            if step > 0:
+                self.stop = max(stop, start)
+            else:
+                self.stop = min(stop, start)
+            self.stop = self[-1] + self.step
 
 
     def _get(self, idx):
@@ -137,7 +150,7 @@ class Range(object):
 
     def __len__(self):
         if self.stop is None:
-            raise ValueError("Unbound range has no length")
+            raise TypeError("Unbounded range has no length")
         d, m = divmod(self.stop - self.start, self.step)
         return d + (1 if m != 0 else 0)
 
@@ -179,11 +192,14 @@ class Range(object):
 
     def index(self, value):
         if value not in self:
-            raise ValueError("Value not in range")
+            raise IndexError(value)
         return (value - self.start) // self.step
 
     def __reversed__(self):
         return self[::-1]
+
+    def __eq__(self, other):
+        return (self.start, self.stop, self.step) == (other.start, other.stop, other.step)
 
     def _subslice(self, start, stop, step):
         if step is None: step = 1
@@ -194,22 +210,20 @@ class Range(object):
             start = self[start]
             if stop is None:
                 stop = self[0] - self.step
-        elif step > 0:
+        else:
             step *= self.step
             start = self[start] if start is not None else self.start
             if stop is None:
                 stop = self.stop
             else:
                 stop = self[stop]
-        else:
-            raise ValueError("Invalid step value")
         return Range(start, stop, step)
 
     def __mul__(self, amount):
-        return Range(self.start, self.stop * amount, self.step * amount)
+        return Range(self.start * amount, self.stop * amount if self.stop is not None else None, self.step * amount)
 
     def __add__(self, amount):
-        return Range(self.start + amount, self.stop + amount, self.step)
+        return Range(self.start + amount, self.stop + amount if self.stop is not None else None, self.step)
 
     def as_slice(self):
         return slice(self.start, self.stop, self.step)
