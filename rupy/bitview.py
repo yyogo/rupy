@@ -1,12 +1,13 @@
 import itertools
 from rupy.compat import *
+from rupy.ranges import Range
 
 
 class BitView(object):
-    def __init__(self, object, start=None, stop=None, step=None):
-        self.__buffer__ = object
+    def __init__(self, obj, start=None, stop=None, step=None):
+        self.__buffer__ = obj
         self.slice = slice(start, stop, step)
-        self._range = range(*self.slice.indices(len(self.__buffer__) * 8))
+        self._range = Range[self.slice]
 
     def _get(self, idx):
         return (self.__buffer__[idx // 8] >> ((idx ^ 7) & 7)) & 1
@@ -126,14 +127,6 @@ class BitView(object):
         self[:] = self[::-1]
 
     def _subslice(self, sl):
-        start, stop, step = sl.indices(len(self))
-        mstart, mstop, mstep = self.slice.indices(len(self.__buffer__) * 8)
-        sstart = mstart + mstep * start
-        sstop = mstart + mstep * stop
-        sstep = mstep * step
-        if sstart < 0 and sstep > 0:
-            sstart = None
-        if sstop < 0 and sstep < 0:
-            sstop = None
-        return BitView(self.__buffer__, sstart, sstop, sstep)
+        r = self._range[sl]
+        return BitView(self.__buffer__, r.start, r.stop, r.step)
 
