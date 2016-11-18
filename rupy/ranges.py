@@ -86,7 +86,7 @@ class RangeMeta(type):
             raise IndexError(item)
 
 
-class Range(object):
+class Range(metabase(RangeMeta)):
     """
     Range([stop])
     Range(start, stop[, step])
@@ -113,7 +113,6 @@ class Range(object):
     >>> Range[2,4,6,...] * 2 == Range[4,8,12,...]
     True
     """
-    __metaclass__ = RangeMeta  # For slice-style range creation
 
     def __init__(self, *args, **kwargs):
         if args and kwargs:

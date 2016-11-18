@@ -1,4 +1,11 @@
 import sys
+
+def metabase(metaclass, *bases):
+    if len(bases) == 0:
+        bases = object,
+    base = metaclass('%s meta-base' % metaclass, bases, {})
+    return base
+
 if sys.version_info.major == 2:
     # Python 2.x compatibility
     from future_builtins import *
@@ -10,6 +17,7 @@ if sys.version_info.major == 2:
             object.next = object.__next__
 
         return object
+
     PY_VERSION = 2
 else:
     # Python 3.x compatibility
