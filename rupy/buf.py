@@ -1,6 +1,7 @@
 import io
 import re
 import string
+import base64
 import binascii
 import struct
 import itertools
@@ -338,7 +339,7 @@ class buf(bytearray):
     def __repr__(self): # real signature unknown; restored from __doc__
         """ x.__repr__() <==> repr(x) """
         if self.isprintable():
-            return "{}({})".format(self.__class__.__name__, ascii(bytes(self)))
+            return "{}(b{})".format(self.__class__.__name__, ascii(bytes(self)))
         else:
             return "{}(hex='{}')".format(self.__class__.__name__, self.hex())
 
@@ -384,12 +385,39 @@ class buf(bytearray):
 
         Convert the buf to hexadecimal representation..
         """
-        if hasattr(bytearray, "hex"):
-            res = bytearray.hex(self)
-        else:
-            res = binascii.hexlify(self)
+        res = getattr(bytearray, "hex", binascii.hexlify)(self)
         if uppercase:
             return res.upper()
+        return res
+
+    @classmethod
+    def frombase64(cls, s, altchars="+/", paddingcheck=False):
+        """
+        Convert a base-64 encoded byte string to a buf.
+
+        >>> print(buf.frombase64("SGVsbG8gV29ybGQ", paddingcheck=False)) # Missing padding, should still work
+        Hello World
+
+        >>> print(buf.frombase64("3q2-7w==", altchars="-_").hex())
+        deadbeef
+        """
+        if not paddingcheck:
+            s += "======"
+        return cls(base64.b64decode(s, altchars=altchars))
+
+    def base64(self, altchars="+/", multiline=True):
+        """
+        Convert a base-64 encoded byte string to a buf.
+
+        >>> print(buf(b'Hello World').base64())
+        SGVsbG8gV29ybGQ=
+
+        >>> print(buf(hex="deadbeef").base64(altchars="-_"))
+        3q2-7w==
+        """
+        res = base64.b64encode(self, altchars.encode('ascii')).decode('ascii')
+        if not multiline:
+            res = res.replace("\n", "")
         return res
 
     def issimpleascii(self):
