@@ -18,7 +18,6 @@ if sys.version_info.major == 2:
 
         return object
 
-    PY_VERSION = 2
 else:
     # Python 3.x compatibility
     long = int
@@ -27,6 +26,5 @@ else:
         if hasattr(object, "__unicode__"):
             setattr(object, "__str__", object.__unicode__)
         return object
-    PY_VERSION = 3
 
 del sys
