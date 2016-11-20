@@ -168,10 +168,8 @@ class Range(metabase(RangeMeta)):
             return self._get(item)
 
     def __contains__(self, item):
-        off = (item - self.start)
-        return off == 0 or \
-               off % self.step == 0 and ((off > 0) == (self.step > 0)) and \
-               ((self.stop is None) or (min(self.start, self[-1]) <= item <= max(self[-1], self.start)))
+        d, m = divmod(item - self.start, self.step)
+        return m == 0 and d >= 0 and (self.stop is None or d < len(self))
 
     def __iter__(self):
         try:
@@ -191,9 +189,10 @@ class Range(metabase(RangeMeta)):
             return '<Range{}>'.format(list(self))
 
     def index(self, value):
-        if value not in self:
+        d, m = divmod(value - self.start,  self.step)
+        if m != 0 or d < 0 or (self.stop is not None and d > len(self)):
             raise IndexError(value)
-        return (value - self.start) // self.step
+        return int(d)
 
     def __reversed__(self):
         return self[::-1]
@@ -251,6 +250,3 @@ if __name__ == '__main__':
     print(Range[1,3,...,81][::-3])
     print(Range[0,...])
     print(list(Range[2,4,6,...,22,24]))
-
-
-
