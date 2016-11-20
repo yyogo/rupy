@@ -27,7 +27,7 @@ True
 I'm tired!
 
 >>> print(Range[0, ...][2:12:2])
-<Range[2, 4, ..., 10]>
+Range[2, 4, ..., 10]
 
 """
 from __future__ import print_function
@@ -108,10 +108,10 @@ class Range(metabase(RangeMeta)):
     True
 
     Ranges can be sliced, shifted (using addition) and "stretched" (using multiplication):
-    >>> Range[1,2,...,100][1:20:2] == Range[2,4,...,20]
-    True
-    >>> Range[2,4,6,...] * 2 == Range[4,8,12,...]
-    True
+    >>> Range[1,2,...,100][1:20:2]
+    Range[2, 4, ..., 20]
+    >>> Range[2,4,6,...] * 2
+    Range[4, 8, 12, ...]
     """
 
     def __init__(self, *args, **kwargs):
@@ -152,7 +152,7 @@ class Range(metabase(RangeMeta)):
         if self.stop is None:
             raise TypeError("Unbounded range has no length")
         d, m = divmod(self.stop - self.start, self.step)
-        return d + (1 if m != 0 else 0)
+        return int(d) + (1 if m != 0 else 0)
 
     def __getitem__(self, item):
         if isinstance(item, slice):
@@ -182,11 +182,11 @@ class Range(metabase(RangeMeta)):
 
     def __repr__(self):
         if self.stop is None:
-            return '<Range[{}, {}, {}, ...]>'.format(self[0], self[1], self[2])
+            return 'Range[{}, {}, {}, ...]'.format(self[0], self[1], self[2])
         elif len(self) > 4:
-            return '<Range[{}, {}, ..., {}]>'.format(self[0], self[1], self[-1])
+            return 'Range[{}, {}, ..., {}]'.format(self[0], self[1], self[-1])
         else:
-            return '<Range{}>'.format(list(self))
+            return 'Range{}'.format(list(self))
 
     def index(self, value):
         d, m = divmod(value - self.start,  self.step)
@@ -220,6 +220,9 @@ class Range(metabase(RangeMeta)):
 
     def __mul__(self, amount):
         return Range(self.start * amount, self.stop * amount if self.stop is not None else None, self.step * amount)
+
+    def __sub__(self, amount):
+        return Range(self.start - amount, self.stop - amount if self.stop is not None else None, self.step)
 
     def __add__(self, amount):
         return Range(self.start + amount, self.stop + amount if self.stop is not None else None, self.step)

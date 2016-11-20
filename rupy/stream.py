@@ -28,16 +28,18 @@ class Stream(io.IOBase):
                 pass
         self.name = getattr(stream, "name", repr(stream))
 
-        self.size = None
         start = max(start, 0)
 
         if size is not None:
             start = min(start, size)
-        if stop is not None:
-            stop = min(max(stop, start), size)
-            self.size = stop - start
+            if stop is not None:
+                stop = min(max(stop, start), size)
+            else:
+                stop = size
+            size = stop - start
 
         self.start = start
+        self.size = size
         self.stop = stop
 
         self._ptr = 0
@@ -71,7 +73,7 @@ class Stream(io.IOBase):
         return self.size
 
     def __repr__(self):
-        return "<StreamSlice {self.start}:{self.stop} of {self.name}>".format(self=self)
+        return "<StreamSlice [{self.start}:{self.stop}] of {self.name!r}>".format(self=self)
 
     def __bytes__(self):
         return self.read()
@@ -97,7 +99,7 @@ class Stream(io.IOBase):
             x = b.find(value)
             while x >= 0:
                 yield i + x
-                x = b.find(value, x)
+                x = b.find(value, x + 1)
 
     def __contains__(self, item):
         for i in self.ifind(item):
@@ -117,7 +119,7 @@ class Stream(io.IOBase):
             self.seek(tmp, io.SEEK_SET)
 
     def read(self, amount=None):
-        if amount < 0 or amount is None:
+        if amount is None or amount < 0:
             amount = self.size
         if self.size is not None:
             amount = max(0, min(int(amount), self.size - self._ptr))
