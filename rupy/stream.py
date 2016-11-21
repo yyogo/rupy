@@ -1,5 +1,6 @@
 from rupy.compat import *
 from rupy.ranges import Range
+from rupy.buf import buf
 
 import contextlib
 import io
@@ -142,6 +143,21 @@ class Stream(io.IOBase):
     def readat(self, offset, amount=-1):
         with self.at(offset, io.SEEK_SET):
             return self.read(amount)
+
+    def getbuffer(self):
+        if hasattr(self.__stream__, "getbuffer"):
+            return self.stream.getbuffer()
+        if self.size is None:
+            raise ValueError("Can't get stream buffer; stream has no size")
+        b = buf(self.size)
+        with self.at(0):
+            self.readinto(b)
+        return b
+
+    def getvalue(self):
+        if hasattr(self.__stream__, "getvalue"):
+            return self.stream.getvalue()
+        return self.__bytes__()
 
     def write(self, data):
         if self.size is not None and len(data) > self.size - self._ptr:
