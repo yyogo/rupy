@@ -10,8 +10,7 @@ class Stream(io.IOBase):
 
     def __init__(self, stream, start=0, stop=None):
         super(Stream, self).__init__()
-
-        if not isinstance(stream, io.IOBase) and hasattr(stream, 'fileno'):
+        if isinstance(stream, file):
             # default file object's readinto() is bad, m'kay?
             stream = io.open(stream.fileno(), getattr(stream, "mode", "rb"), buffering=0)
 
@@ -76,7 +75,8 @@ class Stream(io.IOBase):
         return "<StreamSlice [{self.start}:{self.stop}] of {self.name!r}>".format(self=self)
 
     def __bytes__(self):
-        return self.read()
+        with self.at(0):
+            return self.read()
 
     def __iter__(self):
         for i, b in self.blocks(self.DEFAULT_BLOCKSIZE):
@@ -134,15 +134,10 @@ class Stream(io.IOBase):
         return self.read(-1)
 
     def readinto(self, obj):
-        self.__stream__.seek(self.start, io.SEEK_SET)
-        toread = len(obj)
         if self.size is not None:
-            toread = min(len(obj), self.size)
-        res = self.__stream__.read(toread)
-        if len(res) != toread:
-            raise IOError("Unexpected end of stream")
-        obj[:toread] = res
-        return toread
+            obj = memoryview(obj)[:min(len(obj), self.size - self._ptr)]
+        self._sync()
+        return self.__stream__.readinto(obj)
 
     def readat(self, offset, amount=-1):
         with self.at(offset, io.SEEK_SET):
@@ -182,7 +177,10 @@ class Stream(io.IOBase):
         return getattr(self.__stream__, 'writeable', lambda : False)()
 
     def seekable(self, *args, **kwargs):
-        return getattr(self.__stream__, 'seekable', lambda : False)()
+        return getattr(self.__stream__, 'seekable', lambda: False)()
+
+    def isatty(self, *args, **kwargs):
+        return getattr(self.__stream__, 'isatty', lambda: False)()
 
     def copy(self, stream, blocksize=DEFAULT_BLOCKSIZE):
         """
@@ -207,4 +205,3 @@ class Stream(io.IOBase):
             yield i
             stream.write(b)
         yield self.size
-

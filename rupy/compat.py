@@ -22,6 +22,7 @@ else:
     # Python 3.x compatibility
     long = int
     buffer = memoryview  # in 2.x these are not compatible in some builtins for some stupid reason
+    file = type("file", (), {})
     def compatible(object):
         if hasattr(object, "__unicode__"):
             setattr(object, "__str__", object.__unicode__)

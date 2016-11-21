@@ -376,6 +376,8 @@ class buf(bytearray):
             hex_string = re.sub('\s+', '', hex_string, flags=re.S)
             source = binascii.unhexlify(hex_string)
             super(buf, self).__init__(source, *args, **kwargs)
+        elif len(args) == 1 and hasattr(args[0], '__bytes__'):
+            super(buf, self).__init__(args[0].__bytes__())
         else:
             super(buf, self).__init__(*args, **kwargs)
 
@@ -753,7 +755,7 @@ class buf(bytearray):
         """
         if hasattr(fobj_or_filename, 'read') or hasattr(fobj_or_filename, 'readinto'):
             fobj = fobj_or_filename
-            if not isinstance(fobj, io.IOBase) and hasattr(fobj, 'fileno'):
+            if isinstance(fobj, file):
                 # default file object's readinto() is bad, m'kay?
                 fobj = io.open(fobj.fileno(), getattr(fobj, "mode", "rb"))
         else:
@@ -814,5 +816,3 @@ class buf(bytearray):
             else:
                 fobj.seek(offset, 1)
         fobj.write(self)
-
-
