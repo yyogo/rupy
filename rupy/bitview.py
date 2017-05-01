@@ -6,8 +6,7 @@ from rupy.ranges import Range
 class BitView(object):
     def __init__(self, obj, start=None, stop=None, step=None):
         self.__buffer__ = obj
-        self.slice = slice(start, stop, step)
-        self._range = Range(*self.slice.indices(len(obj) * 8))
+        self._range = Range(start, stop, step).clamp(len(obj) * 8)
 
     def _get(self, idx):
         return (self.__buffer__[idx // 8] >> ((idx ^ 7) & 7)) & 1
@@ -48,7 +47,7 @@ class BitView(object):
 
     def __repr__(self):
         return '<BitView of %s(%d) instance (%s, %s, %s)>' % (
-            type(self.__buffer__), len(self.__buffer__), self.slice.start, self.slice.stop, self.slice.step)
+            type(self.__buffer__), len(self.__buffer__), self._range.start, self._range.stop, self._range.step)
 
     def __nonzero__(self):
         return any(x for x in self)
@@ -117,14 +116,14 @@ class BitView(object):
         if len(self) % 8 != 0:
             raise ValueError("Bit view not aligned to octet")
         for i in range(0, len(self), 8):
-             self[i:i+8] = self[i:i+8][::-1]
+             self[i:i+8].reverse()
 
     def reverse(self):
         """
 
         Reverse the bits of the buffer in-place
         """
-        self[:] = self[::-1]
+        self[:] = list(self[::-1])
 
     def _subslice(self, sl):
         r = self._range[sl]
