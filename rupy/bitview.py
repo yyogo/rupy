@@ -6,7 +6,7 @@ from rupy.ranges import Range
 class BitView(object):
     def __init__(self, obj, start=None, stop=None, step=None):
         self.__buffer__ = obj
-        self._range = Range(start, stop, step).clamp(len(obj) * 8)
+        self._range = Range(start, stop, step).clamp(len(obj) * 8 - 1)
 
     def _get(self, idx):
         return (self.__buffer__[idx // 8] >> ((idx ^ 7) & 7)) & 1
