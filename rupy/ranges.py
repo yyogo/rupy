@@ -82,6 +82,7 @@ from rupy.compat import *
 from numbers import Real
 from functools import total_ordering
 import itertools
+import sys
 
 # The metaclass is used to support indexing syntax (ugly hack but pretty results!)
 class RangeMeta(type):
@@ -194,16 +195,14 @@ class Range(metabase(RangeMeta)):
         self.stop = stop
 
     def _form(self, idx):
+        """ Apply the series function on idx. -> step * idx + start """
         return self.start + self.step * idx
 
-    def _alias(self, value):
+    def _alias(self, value, roundup=True):
         """ Find the nearest value in the range """
         d, m = divmod(value - self.start, self.step)
-        if m != 0:
+        if m != 0 and roundup:
             d += 1
-        d = max(0, d)
-        if self.is_bounded():
-            d = min(d, len(self))
         return d
 
     def is_bounded(self):
@@ -295,18 +294,18 @@ class Range(metabase(RangeMeta)):
             start, stop, step = sl.start, sl.stop, sl.step
             step = step or 1
             if stop is not None and stop < 0:
-                raise ValueError("Can't use negative indices with unbounded range")
+                raise IndexError("Can't use negative indices with unbounded range")
+
             if step > 0:
                 if start is None:
                     start = 0
-                rstop = self._form(stop) if stop is not None else None
             else:
                 if start is None:
-                    raise ValueError("Can't reverse unbounded range")
+                    raise IndexError("Can't reverse unbounded range")
                 if stop is None:
                     stop = -1
-                rstop = self._form(stop)
 
+            rstop = self._form(stop) if stop is not None else None
             return Range(self[start], rstop, self.step * step)
 
     def __mul__(self, amount):
@@ -349,29 +348,43 @@ class Range(metabase(RangeMeta)):
         """
         return obj[self.as_slice()]
 
-    def clamp(self, high, low=0):
+    def clamp(self, *args):
         """
-        Range.clamp(high[, low]) -> Range
+        Range.clamp([low, ]high) -> Range
 
         Return a Range bounded by the supplied values.
-        All values in the resulting range will be in the range [low,high).
+        All values in the resulting range will be in the range [low, high].
 
         >>> r = Range()
         >>> r
         Range[0, 1, 2, ...]
         >>> r.clamp(20)
-        Range[0, 1, ..., 19]
-        >>> Range[29, 28, ...].clamp(10, 5)
-        Range[9, 8, ..., 5]
-        >>> Range[2, 4, ..., 36].clamp(19, 7)
+        Range[0, 1, ..., 20]
+        >>> Range[29, 28, ...].clamp(5, 10)
+        Range[10, 9, ..., 5]
+        >>> Range[2, 4, ..., 36].clamp(7, 19)
         Range[8, 10, ..., 18]
         >>> Range(10, 20).clamp(30, 40)
         Range(0)
+        >>> Range(10, 20).clamp(5, 5)
+        Range(0)
+        >>> Range(10, 20).clamp(5, 15)
+        Range[10, 11, ..., 15]
+        >>> Range[12, 15, ..., 24].clamp(16, 17)
+        Range(0)
         """
-        if self.step > 0:
-            return self[self._alias(low):self._alias(high - 1) + 1]
+        low = 0
+        if len(args) == 1:
+            high, = args
+        elif len(args) == 2:
+            low, high = args
         else:
-            return self[self._alias(high - 1):self._alias(low) + 1]
+            raise TypeError("Range.clamp() expected 1, 2 arguments (%d given)" % len(args))
+
+        if self.step < 0:
+            high, low = low, high
+        start, end = self._alias(low), self._alias(high, False)
+        return self[max(0, start):max(0, end+1)]
 
     def indices(self, length=None):
         """
@@ -393,7 +406,7 @@ class Range(metabase(RangeMeta)):
         (4, -2, -2)
         """
         if length is not None:
-            r = self.clamp(length)
+            r = self.clamp(length - 1)
         else:
             r = self
         return r.start, r.stop, r.step
