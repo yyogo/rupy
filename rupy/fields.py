@@ -354,7 +354,7 @@ if __name__ == '__main__':
             a: uint16
             uint32
             c: uint64
-            d: Bytes(10).
+            d: Bytes(10)
         }
     """)
 

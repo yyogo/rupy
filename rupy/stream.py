@@ -7,6 +7,12 @@ import io
 
 @compatible
 class Stream(io.IOBase):
+    """
+    Stream(filelike_object [,start=0 [, stop]])
+    Stream.open(filename, mode, ...) => Stream(io.open(filename, mode, ...))
+
+    An enhanced binary IO stream with slicing support.
+    """
     DEFAULT_BLOCKSIZE = 4*1024*1024  # 4Mb
 
     def __init__(self, stream, start=0, stop=None):
@@ -44,17 +50,22 @@ class Stream(io.IOBase):
 
         self._ptr = 0
 
+    @classmethod
+    def open(cls, *args, **kwargs):
+        """ Stream.open([args...]) => Stream(io.open([args...])) """
+        return cls(io.open(*args, **kwargs))
+
     def __getitem__(self, idx):
         if isinstance(idx, slice):
             if idx.step not in (1, None):
-                raise ValueError("Can't have stream slice with step value")
+                raise ValueError("Stream doesn't support non-sequential slices")
             start, stop = idx.start if idx.start is not None else 0, idx.stop if idx.stop is not None else self.stop
             start += self.start
             if stop is not None:
                 stop = max(start, min(self.start + stop, self.stop))
             return Stream(self.__stream__, start, stop)
 
-        return bytes(self[idx:idx+1])
+        return bytes(self[idx:idx+1])[0]
 
     def __setitem__(self, idx, value):
         if not isinstance(idx, slice):
@@ -68,6 +79,7 @@ class Stream(io.IOBase):
             s.write(value)
 
     def __len__(self):
+        """ This may fail on Python 2 if the file size is larger than INT_MAX."""
         if self.size is None:
             raise IOError("Stream has no defined length")
         return self.size
@@ -80,27 +92,45 @@ class Stream(io.IOBase):
             return self.read()
 
     def __iter__(self):
-        for i, b in self.blocks(self.DEFAULT_BLOCKSIZE):
-            for x in b:
+        buf = bytearray(self.DEFAULT_BLOCKSIZE)
+        for _ in self.buffer(buf):
+            for x in buf:
                 yield x
 
     def blocks(self, blocksize=DEFAULT_BLOCKSIZE, tail=0):
-        buf = bytearray(blocksize + tail)
+        """ stream.blocks([blocksize [,tail]]) => generator of Streams
+
+        Iterate over stream blocks with the specified blocksize.
+        Yields stream slices.
+        """
         for i in Range(0, self.size, blocksize):
             b = (self[i:i + blocksize + tail])
+            yield b
+
+    def buffer(self, buf, tail=0):
+        """ stream.buffer(buffer_object [,tail=0]) => coroutine yielding ints
+
+        Iterate over blocks with an external buffer. Yields starting offset for each block. 
+        Will truncate the buffer on incomplete read.
+        The optional tail argument makes the buffer contain some data from the beginning
+        of the next block (useful for e.g searches).
+        """
+        for b in self.blocks(len(buf) - tail, tail):
             r = b.readinto(buf)
-            if r < blocksize + tail:
-                yield i, buf[:r]
-                break
-            else:
-                yield i, buf
+            if r < len(buf):
+                # truncate buffer
+                buf[r:] = buf[:0]
+            yield b.start
 
     def ifind(self, value, blocksize=DEFAULT_BLOCKSIZE):
-        for i, b in self.blocks(blocksize, len(value)):
-            x = b.find(value)
+        while len(value) > blocksize:
+            blocksize *= 2
+        buf = bytearray(blocksize)
+        for i in self.buffer(buf, len(value)):
+            x = buf.find(value)
             while x >= 0:
                 yield i + x
-                x = b.find(value, x + 1)
+                x = buf.find(value, x + 1)
 
     def __contains__(self, item):
         for i in self.ifind(item):
@@ -138,13 +168,18 @@ class Stream(io.IOBase):
         if self.size is not None:
             obj = memoryview(obj)[:min(len(obj), self.size - self._ptr)]
         self._sync()
-        return self.__stream__.readinto(obj)
+        if hasattr(self.__stream__, "readinto"):
+            return self.__stream__.readinto(obj)
+        else:
+            data = self.__stream__.read(len(obj))
+            obj[:len(data)] = data
 
     def readat(self, offset, amount=-1):
         with self.at(offset, io.SEEK_SET):
             return self.read(amount)
 
     def getbuffer(self):
+        """ Returns a buf object containing the stream data. """
         if hasattr(self.__stream__, "getbuffer"):
             return self.stream.getbuffer()
         if self.size is None:
@@ -206,7 +241,7 @@ class Stream(io.IOBase):
         :param blocksize: Optional; transfer block size.
         :return: None
         """
-        for i in self.icopy(stream, blocksize):
+        for _ in self.icopy(stream, blocksize):
             pass # Already done
 
     def icopy(self, stream, blocksize=DEFAULT_BLOCKSIZE):
@@ -217,7 +252,9 @@ class Stream(io.IOBase):
         :param blocksize: Optional; transfer block size.
         :return: a generator
         """
-        for i, b in self.blocks(blocksize):
+        buf = bytearray(blocksize)
+        for i in self.buffer(buf):
             yield i
-            stream.write(b)
+            stream.write(buf)
         yield self.size
+

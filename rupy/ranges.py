@@ -267,8 +267,8 @@ class Range(metabase(RangeMeta)):
         """
         Range.index(value)
 
-        Returns the index where value appears in the range.
-        Raises IndexError otherwise.
+        Return the index where value appears in the range.
+        Raise IndexError if it doesn't.
 
         >>> Range[0, 5, ...].index(781236459815) == 156247291963
         True
@@ -416,3 +416,4 @@ __all__ = ["Range"]
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
