@@ -9,7 +9,7 @@ def metabase(metaclass, *bases):
 if sys.version_info.major == 2:
     # Python 2.x compatibility
     from future_builtins import *
-    range = xrange  # Every time I see 'range' used in a for loop I cringe
+    range = xrange  # No real need for range() over xrange()
     def compatible(object):
         if hasattr(object, "__bytes__"):
             object.__str__ = object.__bytes__

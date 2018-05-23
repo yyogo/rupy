@@ -138,7 +138,7 @@ class HexDump(object):
         return self.dump()
 
     def __repr__(self):
-        return "<%r of %r object, %s bytes:\n%s >" % (self.__class__.__name__,
+        return "<%s of %s object, %s bytes:\n%s >" % (self.__class__.__name__,
             type(self.data).__name__, self.length, HexDump(
                 self.data, width=self.width, groups=self.groups, prefix='  ', bytefmt=self.bytefmt
             ).dump(15, True).rstrip()
