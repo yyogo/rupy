@@ -46,8 +46,10 @@ class BitView(object):
         return bin(self.to_int())[2:].zfill(len(self))
 
     def __repr__(self):
-        return '<BitView of %s(%d) instance (%s, %s, %s)>' % (
-            type(self.__buffer__), len(self.__buffer__), self._range.start, self._range.stop, self._range.step)
+        if len(self) > 64:
+            b = u'...'.join([str(self[:48]), str(self[-10:])])
+        return '<BitView(<%s>, %s) |%s|>' % (
+                self.__buffer__.__class__.__name__, self._range, b)
 
     def __nonzero__(self):
         return any(x for x in self)

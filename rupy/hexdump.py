@@ -4,7 +4,7 @@ from rupy.compat import *
 @compatible
 class HexDump(object):
     """
-    HexDump(data, width=16, groups=(2,4), prefix='')
+    HexDump(data, width=16, groups=(2,4), prefix='', bytefmt='02x')
 
     Dump hex.
 
@@ -13,27 +13,48 @@ class HexDump(object):
              (1,) - space after every byte
              (2,4) - space after every two bytes, and another after
                      every 4 2-byte groups
+             (-4,) - group 4 bytes (dwords), display little-endian
+                     (reverse order)
     prefix - Optional prefix for each line in the dump
+    bytefmt - Unit format for dump, defaults to lowercase zero-padded
+              (should be padded for uniform width)
     """
-    fmt = u'{self.prefix}{offset:06x}| {dump} |{asc:{self.width}}|'
+    # General line format. asc = ascii dump, dump = hex dump
+    fmt = u'{self.prefix}{offset:{self.offsetfmt}}| {dump} |{asc:{self.width}}|'
+    # Format for hidden lines
     snipfmt = u'{self.prefix}...    [0x{bytes:x} hidden bytes]'
+    # Format for duplicate lines
     dupfmt = u'{self.prefix}***    [0x{lines:x} duplicate lines]'
+    # Translation table for printable ascii characters
     ascii_trans = bytearray(x if 32 <= x < 127 else b'.'[0] for x in range(256))
+    # Format for offset field
+    offsetfmt = u'06x'
 
-    def __init__(self, data, width=16, groups=(2, 4), prefix=''):
+    def __init__(self, data, width=16, groups=(2, 4), prefix=u'', bytefmt=u'02x'):
         self.data = data
         self._mv = memoryview(data)  # to support all buffer types
         self.width = width
         self.groups = groups
         self.length = len(data)
         self.prefix = prefix
-        pattern = [u'{}'] * self.width
+        self.bytefmt = bytefmt
+
+        pattern = [u'{{{}}}'.format(i) for i in range(self.width)]
         for g in groups:
-            pattern = [''.join(pattern[i:i + g]) +
+            if g == 0:
+                raise ValueError("invalid group number")
+            sgn = 1 if g > 0 else -1
+            g = sgn * g
+            pattern = [''.join(pattern[i:i + g][::sgn]) +
                        ' ' for i in range(0, width, g)]
         self._dump_fmt_pattern = ''.join(pattern).strip()
-        self._dump_fmt = self._dump_fmt_pattern.format(
-            *([u'{:02x}'] * self.width))
+        self._dump_fmt = self._pattern_for_width(self.width)
+
+    def _pattern_for_width(self, width):
+        pad = u' ' * len('{d:{bytefmt}}'.format(d=0xff, bytefmt=self.bytefmt))
+        return self._dump_fmt_pattern.format(
+            *([u'{{{i}:{bytefmt}}}'.format(i=i, bytefmt=self.bytefmt) for i in range(width)] 
+                + [pad] * (self.width - width)))
 
     def __len__(self):
         """ len(hd) <=> hd.__len__
@@ -44,8 +65,7 @@ class HexDump(object):
     def _format_line(self, offset, data):
         data = bytearray(data)
         if len(data) < self.width:  # partial line
-            dump_fmt = self._dump_fmt_pattern.format(
-                *([u'{:02x}'] * len(data) + [u'  '] * (self.width - len(data))))
+            dump_fmt = self._pattern_for_width(len(data))
         else:
             dump_fmt = self._dump_fmt
         asc = data.translate(self.ascii_trans).decode('ascii')
@@ -120,7 +140,7 @@ class HexDump(object):
     def __repr__(self):
         return "<%r of %r object, %s bytes:\n%s >" % (self.__class__.__name__,
             type(self.data).__name__, self.length, HexDump(
-                self.data, width=self.width, groups=self.groups, prefix='  '
+                self.data, width=self.width, groups=self.groups, prefix='  ', bytefmt=self.bytefmt
             ).dump(15, True).rstrip()
         )
 

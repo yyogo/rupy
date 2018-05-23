@@ -339,7 +339,7 @@ class buf(bytearray):
     def __repr__(self): # real signature unknown; restored from __doc__
         """ x.__repr__() <==> repr(x) """
         if self.isprintable():
-            return "{}(b{})".format(self.__class__.__name__, ascii(bytes(self)))
+            return "{}({})".format(self.__class__.__name__, ascii(bytes(self)))
         else:
             return "{}(hex='{}')".format(self.__class__.__name__, self.hex())
 
@@ -816,3 +816,7 @@ class buf(bytearray):
             else:
                 fobj.seek(offset, 1)
         fobj.write(self)
+
+    def __hash__(self):
+        return hash(bytes(self))
+
