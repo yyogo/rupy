@@ -60,6 +60,44 @@ class BitView(object):
         # so you can just "print b.bits"
         return ''.join(('0', '1')[x] for x in self)
 
+    def __format__(self, spec):
+        """
+        bv.__format__(spec) <=> format(bv, spec) 
+
+        format the bits according to the spec.
+        Spec can be an array of comma-seperated integers, indicating the grouping of the bits.
+        Use negative values to reverse the group.
+        e.g, a spec of '4' will group by 4 bits; '8,2' will group by 8 bits, then by 2 groups of 8.
+        groups are seperated by spaces by default. You may specify an alternative character by
+        a semicolon at the end of the spec, e.g: "4,2;-" will use "-" as a seperator.
+        """
+
+        # this could probably be written better. meh
+        if spec:
+            try:
+                spec_fields = spec.split(';', 1)
+                seperator = ' '
+                if len(spec_fields) > 1:
+                    seperator = spec_fields[1]
+                spec = spec_fields[0]
+                groups = [int(x) for x in spec.split(',')]
+                out = self
+                for g in groups:
+                    if g == 0:
+                        raise ValueError()
+                    sgn = 1 if g > 0 else -1
+                    g *= sgn
+                    out = [out[i:i+g][::sgn] for i in range(0, len(out), g)]
+                def _flatten(m):
+                    if isinstance(m, list):
+                        return seperator.join(_flatten(x) for x in m) + seperator
+                    return str(m)
+                return _flatten(out).strip()
+            except ValueError:
+                raise ValueError("Invalid format specification")
+        else:
+            return str(self)
+
     def __bytes__(self):
         """ x.__bytes__() <=> bytes(x)  # in Python 3.x """
         return bytes(self.to_bytes())
