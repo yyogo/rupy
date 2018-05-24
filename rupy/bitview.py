@@ -43,11 +43,14 @@ class BitView(object):
             yield self._get(i)
 
     def __str__(self):
-        return bin(self.to_int())[2:].zfill(len(self))
+        # fastest
+        return bin(self.to_int())[2:].zfill(len(self))[:len(self)]
 
     def __repr__(self):
         if len(self) > 64:
             b = u'...'.join([str(self[:48]), str(self[-10:])])
+        else:
+            b = str(self)
         return '<BitView(<%s>, %s) |%s|>' % (
                 self.__buffer__.__class__.__name__, self._range, b)
 
@@ -68,6 +71,19 @@ class BitView(object):
         for i, x in  zip(self._range, other):
             self[i] |= x
         return self
+
+
+    def shift_right(self, amount):
+        self.apply([0] * amount + list(self))
+
+    def shift_left(self, amount):
+        self.apply(itertools.chain(self[amount:], [0] * amount))
+
+    def rotate_right(self, amount):
+        self.apply(list(self[-amount:]) + list(self[:-amount]))
+
+    def rotate_left(self, amount):
+        self.apply(list(self[amount:]) + list(self[:amount]))
 
     def invert(self):
         """
@@ -94,19 +110,40 @@ class BitView(object):
         for i, x in zip(self._range, bits):
             self._set(i, x)
 
-    def to_int(self, little_endian=False):
+    def to_int(self, msb_first=True):
         r = self._range
-        if not little_endian:
+        if msb_first:
             r = reversed(r)
         return sum(self._get(x) << i for i, x in enumerate(r))
 
-    def from_int(self, n, little_endian=False):
+    def from_int(self, n, msb_first=True):
         r = self._range
-        if not little_endian:
+        if msb_first:
             r = reversed(r)
         for i in r:
             self[i] = n & 1
             n >>= 1
+
+    @property
+    def int_le(self):
+        """ Return the little-endian (lsb-first) integer value of the bits """
+        return self.to_int(msb_first=False)
+
+    @int_le.setter
+    def int_le(self, n):
+        self.from_int(n, msb_first=False)
+
+    @property
+    def int_be(self):
+        """ Return the big-endian (msb-first) integer value of the bits """
+        return self.to_int(msb_first=True)
+
+    @int_be.setter
+    def int_be(self, n):
+        self.from_int(n, msb_first=True)
+
+    # bit representation - msb first by default (makes more sense)
+    int = int_be
 
     def to_bytes(self):
         if len(self) % 8 != 0:
