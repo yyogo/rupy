@@ -75,6 +75,8 @@ Range[0, 1, 2, ...]
 Range[0, -1, -2, ...]
 >>> list(Range[2,4,6,...,22,24])
 [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]
+>>> Range[10, ..., 0] == Range(10, -1, -1)
+True
 
 """
 from __future__ import print_function
@@ -91,11 +93,11 @@ class RangeMeta(type):
             start, stop, step = item.start, item.stop, item.step
             return cls(start, stop, step)
         elif isinstance(item, tuple):
-            # Series expansion
+            # Seqeuence expansion
             if len(item) == 0 or item.count(Ellipsis) > 1:
                 raise ValueError("Invalid series definition")
             if Ellipsis not in item:
-                # explicit series, this is here for completeness sake
+                # explicit sequence, this is here for completeness sake
                 start = item[0]
                 if len(item) == 1:
                     return cls(start, start+1, 1)
@@ -105,14 +107,15 @@ class RangeMeta(type):
                 if list(item) != list(res):
                     raise ValueError("Invalid series")
                 return res
-            # series expansion
+            # sequence expansion
             begin, end = item[:item.index(Ellipsis)], item[item.index(Ellipsis)+1:]
             if len(begin) == 0:
                 raise ValueError("Range must have lower bound")
 
             if len(begin) == 1:
                 start, = begin
-                step = 1
+                # Allow for descending sequence like [8, ..., 1]
+                step = -1 if len(end) > 0 and end[-1] < start else 1
             else:
                 start, sec = begin[:2]
                 step = sec - start
