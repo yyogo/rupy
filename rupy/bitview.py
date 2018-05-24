@@ -8,6 +8,18 @@ class BitView(object):
         self.__buffer__ = obj
         self._range = Range(start, stop, step).clamp(len(obj) * 8 - 1)
 
+    def copy(self):
+        """
+        bv.copy() => bitview instance (with new buffer)
+
+        Copy the bit view and the associated data (only within the slice).
+        """
+        from rupy import buf
+        n = self.to_int()
+        n <<= (-len(self)) % 8  # pad *bottom* with zeroes
+        b = buf.from_int(n, size=(len(self) + 7) // 8, byteorder='big')
+        return self.__class__(b, stop=len(self))
+
     def _get(self, idx):
         return (self.__buffer__[idx // 8] >> ((idx ^ 7) & 7)) & 1
 
@@ -43,12 +55,18 @@ class BitView(object):
             yield self._get(i)
 
     def __str__(self):
-        # fastest
-        return bin(self.to_int())[2:].zfill(len(self))[:len(self)]
+        """ x.__str__() <=> str(x) """
+        # Return string (rather than bytes) in both Python 2 and 3
+        # so you can just "print b.bits"
+        return ''.join(('0', '1')[x] for x in self)
+
+    def __bytes__(self):
+        """ x.__bytes__() <=> bytes(x)  # in Python 3.x """
+        return bytes(self.to_bytes())
 
     def __repr__(self):
         if len(self) > 64:
-            b = u'...'.join([str(self[:48]), str(self[-10:])])
+            b = u'...'.join((str(self[:48]), str(self[-10:])))
         else:
             b = str(self)
         return '<BitView(<%s>, %s) |%s|>' % (
@@ -72,7 +90,6 @@ class BitView(object):
             self[i] |= x
         return self
 
-
     def shift_right(self, amount):
         self.apply([0] * amount + list(self))
 
@@ -87,7 +104,6 @@ class BitView(object):
 
     def invert(self):
         """
-
         Invert each bit in the range
         """
         self.__ixor__(itertools.cycle([1]))
@@ -111,12 +127,14 @@ class BitView(object):
             self._set(i, x)
 
     def to_int(self, msb_first=True):
-        r = self._range
+        s = str(self)
         if msb_first:
-            r = reversed(r)
-        return sum(self._get(x) << i for i, x in enumerate(r))
+            s = s[::-1]
+        return int(s, 2)
 
     def from_int(self, n, msb_first=True):
+        if n.bit_length() > len(self):
+            raise OverflowError("Integer value too big to fit in bit view")
         r = self._range
         if msb_first:
             r = reversed(r)
@@ -125,31 +143,31 @@ class BitView(object):
             n >>= 1
 
     @property
-    def int_le(self):
-        """ Return the little-endian (lsb-first) integer value of the bits """
+    def int_lsb(self):
+        """ Return the lsb-first integer value of the bits """
         return self.to_int(msb_first=False)
 
-    @int_le.setter
-    def int_le(self, n):
+    @int_lsb.setter
+    def int_lsb(self, n):
         self.from_int(n, msb_first=False)
 
     @property
-    def int_be(self):
-        """ Return the big-endian (msb-first) integer value of the bits """
+    def int_msb(self):
+        """ Return the (msb-first) integer value of the bits """
         return self.to_int(msb_first=True)
 
-    @int_be.setter
-    def int_be(self, n):
+    @int_msb.setter
+    def int_msb(self, n):
         self.from_int(n, msb_first=True)
 
     # bit representation - msb first by default (makes more sense)
-    int = int_be
+    int = int_msb
 
     def to_bytes(self):
         if len(self) % 8 != 0:
             raise ValueError("Bit view not aligned to octet")
         from rupy.buf import buf
-        return buf.from_int(self.to_int(), 'little')
+        return buf.from_int(self.to_int(), size=len(self) // 8, byteorder='big')
 
     def rev8(self):
         if len(self) % 8 != 0:

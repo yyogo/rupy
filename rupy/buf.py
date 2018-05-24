@@ -124,6 +124,9 @@ class buf(bytearray):
         """
         return cls(hex=hexstring)
 
+    # Python 3 bytes() has fromhex, but convention recommends from_hex
+    from_hex = fromhex
+
     def join(self, iterable_of_bytes):
         """
         B.join(iterable_of_bytes) -> bytes
@@ -393,7 +396,7 @@ class buf(bytearray):
         return res
 
     @classmethod
-    def frombase64(cls, s, altchars="+/", paddingcheck=False):
+    def from_base64(cls, s, altchars="+/", paddingcheck=False):
         """
         Convert a base-64 encoded byte string to a buf.
 
@@ -490,7 +493,7 @@ class buf(bytearray):
     @classmethod
     def from_int(cls, n, size=None, byteorder='little', signed=False):
         """
-        buf.fromint(n[, size[, little_endian=True[, signed=False]]])
+        buf.from_int(n[, size[, byteorder='little'[, signed=False]]])
 
         Convert an integer to a byte array.
         The optional size arguemnt determines the size of the resulting array
