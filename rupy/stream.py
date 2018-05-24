@@ -9,7 +9,7 @@ import io
 class Stream(io.IOBase):
     """
     Stream(filelike_object [,start=0 [, stop]])
-    Stream.open(filename, mode, ...) => Stream(io.open(filename, mode, ...))
+    Stream.open(filename [,mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop)
 
     An enhanced binary IO stream with slicing support.
     """
@@ -19,8 +19,12 @@ class Stream(io.IOBase):
         super(Stream, self).__init__()
         if isinstance(stream, file):
             # default file object's readinto() is bad, m'kay?
-            stream = io.open(stream.fileno(), getattr(stream, "mode", "rb"), buffering=0)
+            stream = io.open(stream.fileno(), getattr(stream, "mode", "rb"), buffering=0) 
 
+        if 'b' not in stream.mode or getattr(stream, 'encoding', None) is not None:
+            raise ValueError("Stream only works with binary streams")
+
+        self.mode = stream.mode
         self.__stream__ = stream
 
         size = getattr(stream, 'size', None)
@@ -51,9 +55,9 @@ class Stream(io.IOBase):
         self._ptr = 0
 
     @classmethod
-    def open(cls, *args, **kwargs):
-        """ Stream.open([args...]) => Stream(io.open([args...])) """
-        return cls(io.open(*args, **kwargs))
+    def open(cls, filename, mode='rb', start=0, stop=None, **kwargs):
+        """ Stream.open(filename [, mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop) """
+        return cls(io.open(filename, mode, **kwargs), start=start, stop=stop)
 
     def __getitem__(self, idx):
         if isinstance(idx, slice):
@@ -85,7 +89,7 @@ class Stream(io.IOBase):
         return self.size
 
     def __repr__(self):
-        return "<StreamSlice [{self.start}:{self.stop}] of {self.name!r}>".format(self=self)
+        return "<{self.__class__.__name__} [{self.start}:{self.stop}] of {self.name!r}>".format(self=self)
 
     def __bytes__(self):
         with self.at(0):
