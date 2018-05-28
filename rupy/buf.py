@@ -28,6 +28,8 @@ except ImportError:
 _REV8 = tuple(int(bin(i)[2:].zfill(8)[::-1], 2) for i in range(256))
 _POPCNT = tuple(bin(i).count('1') for i in range(256))
 
+ByteType = type(b'x'[0])  # int in python3, str in python2
+
 @compatible
 class buf(bytearray):
     """
@@ -55,13 +57,12 @@ class buf(bytearray):
     >>> buf(hex="deadbeef")
     buf(hex='deadbeef')
     """
-
     def _create_fill(self, width, pattern):
-        if len(pattern) == 0:
-            return self.__class__(0)
         real_len = max(len(self), width)
         if pattern is None:
             return self.__class__(real_len)
+        elif hasattr(pattern, '__len__') and len(pattern) == 0:
+            return self.__class__(0)
         if isinstance(pattern, int):
             pattern = bytes([pattern])
         times = (real_len + len(pattern) - 1) // len(pattern)
@@ -119,10 +120,11 @@ class buf(bytearray):
     def fromhex(cls, hexstring):
         """
         bytearray.fromhex(string) -> bytearray
+        bytearray.from_hex(string) -> bytearray  # alias
 
         Create a bytearray object from a string of hexadecimal numbers.
         Spaces between two numbers are accepted.
-        Example: bytearray.fromhex('B9 01EF') -> bytearray(b'\xb9\x01\xef').
+        Example: bytearray.fromhex('B9 01EF') -> bytearray(b'\\xb9\\x01\\xef').
         """
         return cls(hex=hexstring)
 
@@ -389,6 +391,7 @@ class buf(bytearray):
     def hex(self, uppercase=False):
         """
         b.hex([uppercase=False]) -> str
+        b.to_hex([uppercase=False]) -> str  # alias
 
         Convert the buf to hexadecimal representation..
         """
@@ -396,6 +399,8 @@ class buf(bytearray):
         if uppercase:
             return res.upper()
         return res
+
+    to_hex = hex
 
     @classmethod
     def from_base64(cls, s, altchars="+/", paddingcheck=False):
