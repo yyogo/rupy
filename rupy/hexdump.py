@@ -1,4 +1,3 @@
-__author__ = "rumbah"
 from rupy.compat import *
 
 @compatible

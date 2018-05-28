@@ -57,6 +57,8 @@ class buf(bytearray):
     """
 
     def _create_fill(self, width, pattern):
+        if len(pattern) == 0:
+            return self.__class__(0)
         real_len = max(len(self), width)
         if pattern is None:
             return self.__class__(real_len)
@@ -400,10 +402,10 @@ class buf(bytearray):
         """
         Convert a base-64 encoded byte string to a buf.
 
-        >>> print(buf.frombase64("SGVsbG8gV29ybGQ", paddingcheck=False)) # Missing padding, should still work
+        >>> print(buf.from_base64("SGVsbG8gV29ybGQ", paddingcheck=False)) # Missing padding, should still work
         Hello World
 
-        >>> print(buf.frombase64("3q2-7w==", altchars="-_").hex())
+        >>> print(buf.from_base64("3q2-7w==", altchars="-_").hex())
         deadbeef
         """
         if not paddingcheck:
@@ -599,32 +601,43 @@ class buf(bytearray):
         if len(res) != length:
             raise OverflowError("not enough data in buffer")
 
-    def blocks(self, blocksize, fillchar=None):
+    def blocks(self, blocksize, padding=None):
         """
-        b.blocks(blocksize[, padding=None]) -> iterable_of_bufs
-
+        b.blocks(blocksize[, padding]) -> iterable_of_bufs
+    
+        Split up the byte array into evenly-sized chunks.
         Returns a generator of blocks, each one with the specified blocksize,
-        optionally right-padded with the specified fillchar.
+        optionally right-padded with the specified padding.
+        If padding is None or unspecified, length will be checked to ensure
+        it is evenly divided by the blocksize. A ValueError will be raised
+        otherwise. 
+        If padding is not None, the last block (if partial) will be
+        padded with the specified padding bytestring (use empty to disable).
+
         >>> g = buf(b'aaaabbbbccccdd').blocks(4)
-        >>> for x in g:
+        Traceback (most recent call last):
+          ...
+        ValueError: bytearray not evenly divided into blocks of size 4
+
+        >>> for x in buf(b'aaaabbbbccccdd').blocks(4, b''):
         ...    print(x)
         aaaa
         bbbb
         cccc
         dd
 
-        >>> g = buf(b'something completely different').blocks(8, b'x')
-        >>> for x in g:
+        >>> for x in buf(b'something completely different').blocks(8, b'x'):
         ...    print(x)
         somethin
         g comple
         tely dif
         ferentxx
         """
-        if fillchar is None:
-            return (self[i:i+blocksize] for i in range(0, len(self), blocksize))
-        else:
-            return (self[i:i+blocksize].rpad(blocksize, fillchar) for i in range(0, len(self), blocksize))
+        if blocksize <= 0:
+            raise ValueError("invalid block size: %r" % blocksize)
+        if padding is None and len(self) % blocksize != 0:
+            raise ValueError("bytearray not evenly divided into blocks of size %r" % blocksize)
+        return (self[i:i+blocksize].rpad(blocksize, padding) for i in range(0, len(self), blocksize))
 
     def unpack(self, fmt, offset=None):
         """

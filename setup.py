@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='rupy',
-    version='0.2a',
+    version='0.2a2',
     packages=['rupy'],
     url='https://gitlab.com/rekodah/rupy',
     license='MIT License',
