@@ -1,5 +1,4 @@
 import itertools
-from rupy.compat import *
 from rupy.ranges import Range
 
 

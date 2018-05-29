@@ -1,6 +1,5 @@
 from rupy.compat import *
 from rupy.ranges import Range
-from rupy.buf import buf
 
 import contextlib
 import io
@@ -93,6 +92,12 @@ class BufStream(io.IOBase):
         else:
             raise StopIteration
 
+    def getbuffer(self):
+        return self.__buffer__
+
+    def getvalue(self):
+        return bytes(self.__buffer__)
+
 
 @compatible
 class Stream(io.IOBase):
@@ -100,7 +105,8 @@ class Stream(io.IOBase):
     Stream(filelike_object [,start=0 [, stop]])
     Stream.open(filename [,mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop)
 
-    An enhanced binary IO stream with slicing support.
+    An enhanced binary IO stream with slicing support. Does not support resizing streams.
+    TODO come up with a better name.
     """
     DEFAULT_BLOCKSIZE = 4*1024*1024  # 4Mb
 
@@ -280,15 +286,10 @@ class Stream(io.IOBase):
             return self.read(amount)
 
     def getbuffer(self):
-        """ Returns a buf object containing the stream data. """
+        """ Returns a buffer object containing the stream data. """
         if hasattr(self.__stream__, "getbuffer"):
             return self.stream.getbuffer()
-        if self.size is None:
-            raise ValueError("Can't get stream buffer; stream has no size")
-        b = buf(self.size)
-        with self.at(0):
-            self.readinto(b)
-        return b
+        return self.getvalue()
 
     def getvalue(self):
         if hasattr(self.__stream__, "getvalue"):

@@ -842,5 +842,28 @@ class buf(bytearray):
         return hash(bytes(self))
 
     def to_stream(self):
-        from rupy import Stream
-        return Stream.from_buffer(self)
+        """
+        b.to_stream() -> BufStream
+
+        Return a memory stream backed by this instance.
+        Modifications to the stream will be reflected in the buffer and vice versa.
+
+        >>> import io
+        >>> b = buf(b"the cat goes")
+        >>> s = b.to_stream()
+        >>> print(s.read())
+        the cat goes
+        >>> _=s.seek(0, io.SEEK_END)
+        >>> _=s.write(b" meow")
+        >>> print(b)
+        the cat goes meow
+        >>> _=s.seek(-4, io.SEEK_END)
+        >>> _=s.write("moo")
+        >>> _=s.truncate()
+        >>> _=s.seek(4)
+        >>> _=s.write("cow")
+        >>> print(b)
+        the cow goes moo
+        """
+        from rupy.stream import BufStream
+        return BufStream(self)

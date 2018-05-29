@@ -81,10 +81,7 @@ True
 """
 from __future__ import print_function
 from rupy.compat import *
-from numbers import Real
-from functools import total_ordering
 import itertools
-import sys
 
 # The metaclass is used to support indexing syntax (ugly hack but pretty results!)
 class RangeMeta(type):
@@ -285,7 +282,14 @@ class Range(metabase(RangeMeta)):
         return iter(self[::-1])
 
     def __eq__(self, other):
+        if not isinstance(other, (Range, slice)):
+            return NotImplemented
         return (self.start, self.stop, self.step) == (other.start, other.stop, other.step)
+
+    def __ne__(self, other):
+        if not isinstance(other, (Range, slice)):
+            return NotImplemented
+        return not self == other
 
     def _subslice(self, sl):
         if self.is_bounded():

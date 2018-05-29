@@ -31,6 +31,13 @@ buf(hex='deadbeef')
 #000040| a8fc 821d f806 a442  93ff 3503 27fe b3dd |.......B..5.'...|
 #000050| 1a8e 0aef da63 8eba  8d4f 6da5 fd44 8634 |.....c...Om..D.4|
 #000060| 3a6e 2395                                |:n#.            |
+
+>>> b = buf(b"hello")
+>>> s = b.to_stream()
+>>> s.seek(0, 2)
+>>> s.write(b" world")
+>>> print(b)
+hello world
 ```
 
 Also available: `hexdump`, which produces nice hexdumps.
