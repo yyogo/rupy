@@ -128,6 +128,12 @@ class BitView(object):
             self[i] |= x
         return self
 
+    def __irshift__(self, amount):
+        self.shift_right(amount)
+
+    def __ilshift__(self, amount):
+        self.shift_left(amount)
+
     def shift_right(self, amount):
         self.apply([0] * amount + list(self))
 

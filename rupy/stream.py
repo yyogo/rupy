@@ -5,6 +5,95 @@ from rupy.buf import buf
 import contextlib
 import io
 
+
+@compatible
+class BufStream(io.IOBase):
+    """ Like io.BytesIO, but using an external buffer. """
+
+    def __init__(self, buffer):
+        self.__buffer__ = buffer
+        m = memoryview(buffer)
+        self.readonly = m.readonly
+        self.mode = 'rb' if self.readonly else 'rb+'
+        del m  # when the memoryview is held the buffer can't be resized
+        self.pos = 0
+        self.name = '<buffer_%#x>' % id(buffer)
+
+    def __len__(self):
+        return len(self.__buffer__)
+
+    @property
+    def size(self):
+        return len(self)
+
+    def _sync(self):
+        self.pos = min(max(0, self.pos), len(self.__buffer__))
+
+    def seek(self, where, whence=io.SEEK_SET):
+        if whence == io.SEEK_CUR:
+            where += self.pos
+        elif whence == io.SEEK_END:
+            where += len(self)
+        where = min(len(self), where)
+
+        self.pos = where
+        return self.pos
+
+    def write(self, data):
+        if not self.writeable():
+            raise IOError("buffer is not writeable")
+        self._sync()
+        self.__buffer__[self.pos:self.pos+len(data)] = data
+        self.pos += len(data)
+        return len(data)
+
+    def read(self, amount=None):
+        self._sync()
+        if amount is not None:
+            res = self.__buffer__[self.pos:self.pos+amount]
+        else:
+            res = self.__buffer__[self.pos:]
+        self.pos += len(res)
+        return bytes(res)
+
+    def readinto(self, b):
+        self._sync()
+        amount = max(0, min(len(b), len(self.__buffer__)) - self.pos)
+        b[:amount] = memoryview(self.__buffer__[self.pos:self.pos + amount])
+        return amount
+
+    def tell(self):
+        self._sync()
+        return self.pos
+
+    def truncate(self, size=None):
+        self._sync()
+        if size is None:
+            size = self.pos
+            self.__buffer__[size:] = ()
+            return len(self.__buffer__)
+
+    def close(self):
+        self.__buffer__ = None
+        super(BufStream, self).close()
+
+    def readable(self):
+        return True
+    def writeable(self):
+        return not self.readonly
+    def seekable(self):
+        return True
+    def isatty(self):
+        return False
+
+    def __next__(self):
+        s = self.readline()
+        if s:
+            return s
+        else:
+            raise StopIteration
+
+
 @compatible
 class Stream(io.IOBase):
     """
@@ -58,6 +147,14 @@ class Stream(io.IOBase):
     def open(cls, filename, mode='rb', start=0, stop=None, **kwargs):
         """ Stream.open(filename [, mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop) """
         return cls(io.open(filename, mode, **kwargs), start=start, stop=stop)
+
+    @classmethod
+    def from_bytes(cls, bytes=b'', start=0, stop=None):
+        return cls(io.BytesIO(bytes), start=start, stop=stop)
+
+    @classmethod
+    def from_buffer(cls, buffer, start=0, stop=None):
+        return cls(BufStream(buffer), start=start, stop=stop)
 
     def __getitem__(self, idx):
         if isinstance(idx, slice):

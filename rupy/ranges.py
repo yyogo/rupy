@@ -165,9 +165,9 @@ class Range(metabase(RangeMeta)):
     >>> Range[2,4,6,...] * 2
     Range[4, 8, 12, ...]
     """
+    __slots__ = ['start', 'step', 'stop']
 
     def __init__(self, *args, **kwargs):
-        __slots__ = ['start', 'step', 'stop']
         if args and kwargs:
             raise TypeError("Can supply either postitional arguments (range()-style) or keywords, not both")
         start, stop, step = None, None, None
@@ -282,7 +282,7 @@ class Range(metabase(RangeMeta)):
         return int(d)
 
     def __reversed__(self):
-        return self[::-1]
+        return iter(self[::-1])
 
     def __eq__(self, other):
         return (self.start, self.stop, self.step) == (other.start, other.stop, other.step)

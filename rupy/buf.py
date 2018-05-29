@@ -841,3 +841,6 @@ class buf(bytearray):
     def __hash__(self):
         return hash(bytes(self))
 
+    def to_stream(self):
+        from rupy import Stream
+        return Stream.from_buffer(self)
