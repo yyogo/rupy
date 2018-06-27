@@ -7,7 +7,6 @@ import operator
 from rupy.buf import buf
 from rupy.compat import *
 
-
 class BasicField(object):
     def __init__(self, fmt):
         self.st = struct.Struct(fmt)
@@ -51,6 +50,7 @@ int16b = BasicField(">h")
 int32b = BasicField(">l")
 int64b = BasicField(">q")
 
+@compatible
 class FieldView(object):
     _fieldset = None
     def __init__(self, buf):
@@ -75,6 +75,11 @@ class FieldView(object):
                 self._fieldset.set(self.__buffer__, i, x)
         else:
             self._fieldset.set(self.__buffer__, key, value)
+
+    def __bytes__(self):
+        buf = bytearray(self._fieldset.size)
+        self._fieldset.pack(buf, self)
+        return bytes(buf)
 
 class FieldSet(object):
     def __init__(self, fields):

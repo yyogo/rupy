@@ -1,6 +1,6 @@
 from rupy.compat import *
 from rupy.ranges import Range
-
+from rupy.fields import FieldMap
 import contextlib
 import io
 
@@ -20,6 +20,12 @@ class BufStream(io.IOBase):
 
     def __len__(self):
         return len(self.__buffer__)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        self.close()
 
     @property
     def size(self):
@@ -149,10 +155,21 @@ class Stream(io.IOBase):
 
         self._ptr = 0
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        self.close()
+
     @classmethod
     def open(cls, filename, mode='rb', start=0, stop=None, **kwargs):
         """ Stream.open(filename [, mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop) """
         return cls(io.open(filename, mode, **kwargs), start=start, stop=stop)
+
+    def close(self):
+        self.__stream__.close()
+        self.__stream__ = None
+        super(Stream, self).close()
 
     @classmethod
     def from_bytes(cls, bytes=b'', start=0, stop=None):
@@ -268,6 +285,14 @@ class Stream(io.IOBase):
         self._ptr += len(res)
         return res
 
+    def read_full(self, amount):
+        """ Read the specified amount of bytes; if not enough in stream, fail (and leave stream unchanged). """
+        data = self.read(amount)
+        if len(data) != amount:
+            self.seek(-amount, io.SEEK_CUR)
+            raise IOError("Incomplete read (requested %d bytes, got %d)" % (amount, len(data)))
+        return data
+
     def readall(self):
         return self.read(-1)
 
@@ -360,3 +385,7 @@ class Stream(io.IOBase):
             stream.write(buf)
         yield self.size
 
+    def read_fields(self, fieldspec):
+        fm = FieldMap(fieldspec)
+        data = bytearray(self.read_full(fm.size))
+        return fm.unpack(data)
