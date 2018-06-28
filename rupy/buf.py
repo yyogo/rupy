@@ -690,7 +690,7 @@ class buf(bytearray):
         If strict is True, total sizes must match.
 
         >>> b = buf(hex='deadbeefaabbccdd01234567')
-        >>> s = b.fields("x: uint32  y: uint32b  z: Bytes[4]")
+        >>> s = b.fields("x: u32  y: u32b  z: Bytes[4]")
         >>> s.x == 0xefbeadde
         True
         >>> s.z == buf(hex='01234567')
@@ -698,7 +698,7 @@ class buf(bytearray):
         >>> s.y = 0xcafebabe
         >>> print(b.hex())
         deadbeefcafebabe01234567
-        >>> b.fields("uint16b", 2)[0] = 0xd00d
+        >>> b.fields("u16b", 2)[0] = 0xd00d
         >>> print(b.hex())
         deadd00dcafebabe01234567
         """

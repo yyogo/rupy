@@ -35,20 +35,20 @@ class Bytes(object):
         buf[:self.size] = data
 
 
-uint8 = byte = BasicField("<B")
-int8 = char = BasicField('<b')
-uint16 = uint16l = BasicField("<H")
-uint32 = uint32l = BasicField("<L")
-uint64 = uint64l = BasicField("<Q")
-uint16b = BasicField(">H")
-uint32b = BasicField(">L")
-uint64b = BasicField(">Q")
-int16 = int16l = BasicField("<h")
-int32 = int32l = BasicField("<l")
-int64 = int64l = BasicField("<q")
-int16b = BasicField(">h")
-int32b = BasicField(">l")
-int64b = BasicField(">q")
+u8 = byte = BasicField("<B")
+i8 = char = BasicField('<b')
+u16 = u16l = BasicField("<H")
+u32 = u32l = BasicField("<L")
+u64 = u64l = BasicField("<Q")
+u16b = BasicField(">H")
+u32b = BasicField(">L")
+u64b = BasicField(">Q")
+i16 = i16l = BasicField("<h")
+i32 = i32l = BasicField("<l")
+i64 = i64l = BasicField("<q")
+i16b = BasicField(">h")
+i32b = BasicField(">l")
+i64b = BasicField(">q")
 
 @compatible
 class FieldView(object):
@@ -124,13 +124,13 @@ def getter(i):
 def setter(i):
     return lambda x, v: operator.setitem(x, i, v)
 
-__all__ = ["uint8", "byte", "int8", "char",
-           "uint16", "uint16l", "uint32",
-           "uint32l", "uint64", "uint64l",
-           "uint16b", "uint32b", "uint64b",
-           "int16", "int16l", "int32", "int32l",
-           "int64", "int64l", "int16b", "int32b",
-           "int64b", "FieldSet", "FieldMap", "Bytes", "Array"]
+__all__ = ["u8", "byte", "i8", "char",
+           "u16", "u16l", "u32",
+           "u32l", "u64", "u64l",
+           "u16b", "u32b", "u64b",
+           "i16", "i16l", "i32", "i32l",
+           "i64", "i64l", "i16b", "i32b",
+           "i64b", "FieldSet", "FieldMap", "Bytes", "Array"]
 
 def parse_dsl(s):
     """
@@ -291,6 +291,8 @@ class FieldMap(FieldSet):
                 v = Bytes(v)
             fields.append(v)
             if k is not None:
+                if k in names:
+                    raise ValueError("Field named %r already defined" % k)
                 names[k] = i
                 properties[k] = property(getter(i), setter(i))
             name_l.append(k)
@@ -298,7 +300,7 @@ class FieldMap(FieldSet):
         properties['_asdict'] = lambda self: dict((n, getattr(self, n)) for n in names)
 
         def map_repr(self):
-            res = ["<%s instance:" % (type(self).__name__,)]
+            res = ["<%d fields:" % (len(self), )]
             for i, k in enumerate(name_l):
                 v_rep = repr(self[i]).splitlines(False)
                 if k is not None:
@@ -317,35 +319,35 @@ TYPES = {x: globals()[x] for x in __all__}
 
 if __name__ == '__main__':
     test = bytearray.fromhex('1234567890abcdef'*3)
-    f = FieldMap([("a", uint16), ("b", uint32), ("c", uint64), ("d", Bytes(10))])
+    f = FieldMap([("a", u16), ("b", u32), ("c", u64), ("d", Bytes(10))])
     x = f.unpack(test)
     print(x[::])
     print((x.a, x.b, x.c, x.d))
 
-    f2 = FieldMap([("x", uint16), ("y", uint16), ("z", f)])
+    f2 = FieldMap([("x", u16), ("y", u16), ("z", f)])
     test2 = bytearray(b"AABB") + test
     y = f2.unpack(test2)
     print(y[::])
     print((y.x, y.y, y.z, y.z.a, y.z.b, y.z.c))
 
     f3 = FieldMap([
-        ('foo', int16),
-        ('bar', int16),
+        ('foo', i16),
+        ('bar', i16),
         ('bazz', [
-            ("a", uint16),
-            uint32,
-            ("c", uint64),
+            ("a", u16),
+            u32,
+            ("c", u64),
             ("d", Bytes(10)),
         ])
     ])
     print(f3.unpack(test2))
 
     f4 = FieldMap([
-        ('foo', 'int16[2]'),
+        ('foo', 'i16[2]'),
         [
-            ("a", 'uint16'),
-            'uint32',
-            ("c", 'uint64'),
+            ("a", 'u16'),
+            'u32',
+            ("c", 'u64'),
             ("d", 'Bytes(10)'),
         ]
     ])
@@ -354,11 +356,11 @@ if __name__ == '__main__':
     print(f4.unpack(test2))
 
     f5 = FieldMap("""
-        foo: int16[2]
+        foo: i16[2]
         {
-            a: uint16
-            uint32
-            c: uint64
+            a: u16
+            u32
+            c: u64
             d: Bytes(10)
         }
     """)

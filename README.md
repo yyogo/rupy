@@ -64,7 +64,7 @@ A small binary structure manipulation library, integrated nicely with the `buf` 
 
 ```python
 >>> b = buf(hex='deadbeef12345678aabb1337')
->>> f = b.fields('a: uint32  b: uint16  c: Bytes[6]')
+>>> f = b.fields('a: u32  b: u16  c: Bytes[6]')
 >>> print(hex(f.a), hex(f.b), repr(f.c))
 0xefbeadde 0x3412 buf(hex='5678aabb1337')
 ```

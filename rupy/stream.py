@@ -385,7 +385,19 @@ class Stream(io.IOBase):
             stream.write(buf)
         yield self.size
 
-    def read_fields(self, fieldspec):
+    def fields(self, fieldspec):
+        """
+        stream.fields(fieldspec) -> BoundFieldMap
+
+        Parse fields directly from the stream. Changes to the returned
+        instance are not written back to the stream.
+
+        >>> b = bytearray.fromhex("deadbeef0000010000010000aabbccdd")
+        >>> stream = Stream.from_buffer(b)
+        >>> fields = stream.fields('x: u16b  y: u16b z: u32l')
+        >>> print('x: {f.x:x} y: {f.y:x} z: {f.z:x}'.format(f=fields))
+        x: dead y: beef z: 10000
+        """
         fm = FieldMap(fieldspec)
         data = bytearray(self.read_full(fm.size))
         return fm.unpack(data)
