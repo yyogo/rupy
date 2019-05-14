@@ -57,6 +57,14 @@ class buf(bytearray):
     >>> buf(hex="deadbeef")
     buf(hex='deadbeef')
     """
+
+    # Maximum length before snipping, set to None to disable snipping
+    _REPR_FULL_MAX = 100
+    # Set to True to always display string as hex, False to never
+    _REPR_HEX = None
+    # Set to 0 to disable hexdump in __repr__
+    _REPR_HEXDUMP_LINES = 10
+
     def _create_fill(self, width, pattern):
         real_len = max(len(self), width)
         if pattern is None:
@@ -343,12 +351,32 @@ class buf(bytearray):
         res.__imul__(n)
         return res
 
+    def __ascii__(self, snip=None):
+        if snip and len(self) > snip:
+            s = ascii(bytes(self[:snip*2//3])) + '...' + ascii(bytes(self[-snip//3:]))
+        else:
+            s = ascii(bytes(self))
+        return "{}({})".format(self.__class__.__name__, s)
+
+    def __hex__(self, snip=None):
+        if snip and len(self) > snip:
+            h = self[:snip*2//3].hex() + '...' + self[-snip//3:].hex()
+        else:
+            h = self.hex()
+        return "{}(hex='{}')".format(self.__class__.__name__, h)
+
     def __repr__(self): # real signature unknown; restored from __doc__
         """ x.__repr__() <==> repr(x) """
-        if self.isprintable():
-            return "{}({})".format(self.__class__.__name__, ascii(bytes(self)))
-        else:
-            return "{}(hex='{}')".format(self.__class__.__name__, self.hex())
+        use_hex = self._REPR_HEX
+        if use_hex is None:
+            use_hex = not self.isprintable()
+        if use_hex:
+            if self._REPR_HEXDUMP_LINES and self._REPR_FULL_MAX and self._REPR_FULL_MAX < len(self):
+                hd = self.hexdump().dump(snip=self._REPR_HEXDUMP_LINES, skip_dups=True).strip()
+                return "<{}, {} bytes:\n{} >".format(self.__class__.__name__, len(self), hd)
+            return self.__hex__(snip=self._REPR_FULL_MAX)
+        return self.__ascii__(snip=self._REPR_FULL_MAX)
+
 
     def __rmul__(self, n): # real signature unknown; restored from __doc__
         """ x.__rmul__(n) <==> n*x """
@@ -851,19 +879,19 @@ class buf(bytearray):
         >>> import io
         >>> b = buf(b"the cat goes")
         >>> s = b.to_stream()
-        >>> print(s.read())
-        the cat goes
+        >>> s.read() == b'the cat goes'
+        True
         >>> _=s.seek(0, io.SEEK_END)
         >>> _=s.write(b" meow")
-        >>> print(b)
-        the cat goes meow
+        >>> b == b'the cat goes meow'
+        True
         >>> _=s.seek(-4, io.SEEK_END)
-        >>> _=s.write("moo")
+        >>> _=s.write(b"moo")
         >>> _=s.truncate()
         >>> _=s.seek(4)
-        >>> _=s.write("cow")
-        >>> print(b)
-        the cow goes moo
+        >>> _=s.write(b"cow")
+        >>> b == b'the cow goes moo'
+        True
         """
         from rupy.stream import BufStream
         return BufStream(self)

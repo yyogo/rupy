@@ -1,7 +1,9 @@
 import itertools
 from rupy.ranges import Range
+from rupy.compat import *
 
 
+@compatible
 class BitView(object):
     def __init__(self, obj, start=None, stop=None, step=None):
         self.__buffer__ = obj

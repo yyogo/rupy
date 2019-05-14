@@ -1,3 +1,4 @@
+__version__ = "0.3a1"
 from rupy.buf import buf
 from rupy.hexdump import hexdump
 from rupy import fields

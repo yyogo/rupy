@@ -120,7 +120,7 @@ class Stream(io.IOBase):
         super(Stream, self).__init__()
         if isinstance(stream, file):
             # default file object's readinto() is bad, m'kay?
-            stream = io.open(stream.fileno(), getattr(stream, "mode", "rb"), buffering=0) 
+            stream = io.open(stream.fileno(), "rb", buffering=0) 
 
         if 'b' not in stream.mode or getattr(stream, 'encoding', None) is not None:
             raise ValueError("Stream only works with binary streams")
@@ -158,16 +158,12 @@ class Stream(io.IOBase):
     def __enter__(self):
         return self
 
-    def __exit__(self):
-        self.close()
-
     @classmethod
     def open(cls, filename, mode='rb', start=0, stop=None, **kwargs):
         """ Stream.open(filename [, mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop) """
         return cls(io.open(filename, mode, **kwargs), start=start, stop=stop)
 
     def close(self):
-        self.__stream__.close()
         self.__stream__ = None
         super(Stream, self).close()
 
@@ -262,7 +258,11 @@ class Stream(io.IOBase):
         return False
 
     def _sync(self):
-        self.__stream__.seek(self._ptr + self.start, io.SEEK_SET)
+        try:
+            self.__stream__.seek(self._ptr + self.start, io.SEEK_SET)
+        except IOError:
+            # can't seek
+            self.seekable = lambda: False
 
     @contextlib.contextmanager
     def at(self, where, whence=io.SEEK_SET):
@@ -332,6 +332,8 @@ class Stream(io.IOBase):
             return self.write(data)
 
     def seek(self, where, whence=io.SEEK_SET):
+        if not self.seekable():
+            raise IOError("Can't seek")
         if whence == io.SEEK_CUR:
             where += self._ptr
         elif whence == io.SEEK_END:
