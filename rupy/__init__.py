@@ -5,4 +5,6 @@ from rupy import fields
 from rupy.fields import FieldMap
 from rupy.ranges import Range
 from rupy.stream import Stream
-from rupy.pp import *
+import sys
+if sys.version_info >= (3, 6):
+    from rupy.pp import *
