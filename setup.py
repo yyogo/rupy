@@ -1,8 +1,9 @@
+from rupy import __version__
 from setuptools import setup
 
 setup(
     name='rupy',
-    version='0.2a2',
+    version=__version__,
     packages=['rupy'],
     url='https://gitlab.com/rekodah/rupy',
     license='MIT License',
@@ -12,7 +13,6 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     classifiers=(
-        "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",

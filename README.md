@@ -134,5 +134,11 @@ buf(hex='63a7349ca38cc6319f3430c72e9659e8aca27705')
 >>> s[:1000].copy(open('/tmp/bar.bi', 'wb'))  # Write stream data to other stream (buffered)
 ```
 
+## `pp`
+Pretty-printing for large nested structures with Unicode trees and colors.
+
+
 ## Compatibility
 This package is compatible with Python versions 2.7 and 3.3+.
+
+
