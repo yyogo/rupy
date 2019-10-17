@@ -7,4 +7,4 @@ from rupy.ranges import Range
 from rupy.stream import Stream
 import sys
 if sys.version_info >= (3, 6):
-    from rupy.pp import *
+    from rupy.pretty import *
