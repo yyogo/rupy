@@ -721,7 +721,7 @@ class buf(bytearray):
         >>> s = b.fields("x: u32  y: u32b  z: Bytes[4]")
         >>> s.x == 0xefbeadde
         True
-        >>> s.z == buf(hex='01234567')
+        >>> bytes(s.z) == buf(hex='01234567')
         True
         >>> s.y = 0xcafebabe
         >>> print(b.hex())
@@ -734,8 +734,8 @@ class buf(bytearray):
         from rupy import fields
         map = fields.FieldMap(fieldspec)
         data = memoryview(self)[offset:offset + map.size]
-        if strict and len(data) != map.size:
-            raise OverflowError("Field map size mismatch (and 'strict' is True)")
+        if strict and len(self) != map.size:
+            raise ValueError("Field map size mismatch (and 'strict' is True)")
         return map.unpack(data)
 
     @property

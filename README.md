@@ -14,7 +14,7 @@ A bytearray-derived class with many useful methods, supporting bitwise operation
 >>> buf(10)
 buf(hex='00000000000000000000')
 
->>> str(buf(b'hello'))
+>>> str(buf(b'hello'))  # utf-8 decode
 'hello'
 
 >>> buf([1,2,3,4])
@@ -49,12 +49,15 @@ Allows for bit addressing and manipulation in-memory.
 >>> b = buf(hex='aa55')
 >>> print(b.bits)
 1010101001010101
->>> print(b.bits[4:-4])
+
+>>> print(b.bits[4:-4])  # bit views support slicing
 10100101
+
 >>> b.bits.invert()
 >>> b
 buf(hex='55aa')
->>> b.bits[:8].set()
+
+>>> b.bits[:8].set()  # set bits to 1
 >>> b
 buf(hex='ffaa')
 ```
@@ -63,10 +66,37 @@ buf(hex='ffaa')
 A small binary structure manipulation library, integrated nicely with the `buf` structure, allowing for stuff like:
 
 ```python
->>> b = buf(hex='deadbeef12345678aabb1337')
->>> f = b.fields('a: u32  b: u16  c: Bytes[6]')
->>> print(hex(f.a), hex(f.b), repr(f.c))
-0xefbeadde 0x3412 buf(hex='5678aabb1337')
+>>> from rupy import buf
+>>> b=buf(hex='12345678aabbccdd')
+>>> b.fields('i32 u8[4]')
+<2 fields:
+   [0]: 2018915346
+   [1]: (170, 187, 204, 221)
+>
+
+>>> b.fields('foo: i32 bar: u8[4]')  # named fields
+Out[4]:
+<2 fields:
+   foo = 2018915346
+   bar = (170, 187, 204, 221)
+>
+
+>>> b.fields('foo: i32 bar: u8[4]').foo = 5  # in-memory change
+>>> b
+buf(hex='05000000aabbccdd')
+
+>>> b.fields('foo: i32b bar: u8[4]').foo = 5  # big endian
+>>> b
+buf(hex='00000005aabbccdd')
+
+>>> b.fields('foo: i32b bar: {a: u16 b: u16}')  # nested structs
+<2 fields:
+   foo = 5
+   bar = <2 fields:
+      a = 48042
+      b = 56780
+   >
+>
 ```
 
 ### `Range`
@@ -86,16 +116,16 @@ iteration, such as xrange()/range() and itertools.count().
 Usage examples:
 
 ```python
->>> print(Range(10))
+>>> print(Range(10))  # like range()
 Range[0, 1, ..., 9]
 
->>> print(Range(None))
+>>> print(Range(None))  # no upper bound, infinite range
 Range[0, 1, 2, ...]
 
 >>> print(Range(step=-1))
 Range[0, -1, -2, ...]
 
->>> for i in Range[1, 2, ..., 10]:
+>>> for i in Range[1, 2, ..., 10]:  # sequence notation
 ...    print(i)
 1
 2
@@ -108,7 +138,7 @@ Range[0, -1, -2, ...]
 9
 10
 
->>> 1024 in Range[2:32768:2]
+>>> 1024 in Range[2:32768:2]  # fast containment check
 True
 
 >>> for i in Range[1, 2, ...]:
@@ -117,12 +147,12 @@ True
 ...        break
 No more!
 
->>> print(Range[0, ...][2:12:2])
+>>> print(Range[0, ...][2:12:2])  # Ranges support slicing
 Range[2, 4, ..., 10]
 ```
 
 ### `Stream`
-A stream wrapper that allows blockwise iteration as well as slicing and single-byte indexing.
+A stream wrapper that allows blockwise iteration as well as slicing and single-byte indexing. 
 
 ```python
 >>> s = Stream.open("foo.bin", "rb")
@@ -136,7 +166,6 @@ buf(hex='63a7349ca38cc6319f3430c72e9659e8aca27705')
 
 ## `pp`
 Pretty-printing for large nested structures with Unicode trees and colors.
-
 
 ## Compatibility
 This package is compatible with Python versions 2.7 and 3.3+.

@@ -1,10 +1,12 @@
 from __future__ import print_function
 import struct
 import re
+import sys
 
 import operator
 
 from rupy.buf import buf
+from rupy.bitview import BitView
 from rupy.compat import *
 
 class BasicField(object):
@@ -17,23 +19,6 @@ class BasicField(object):
 
     def pack(self, buf, data):
         self.st.pack_into(buf, 0, data)
-
-class Bytes(object):
-    buftype = buf
-    def __init__(self, size):
-        self.size = size
-
-    def unpack(self, buf):
-        res = self.buftype(buf[:self.size])
-        if len(res) != self.size:
-            raise ValueError("insufficient data in buffer for Bytes field")
-        return res
-
-    def pack(self, buf, data):
-        if len(data) != self.size:
-            raise ValueError('data size mismatch for Bytes field')
-        buf[:self.size] = data
-
 
 u8 = byte = BasicField("<B")
 i8 = char = BasicField('<b')
@@ -49,6 +34,8 @@ i64 = i64l = BasicField("<q")
 i16b = BasicField(">h")
 i32b = BasicField(">l")
 i64b = BasicField(">q")
+f32 = BasicField("<f")
+f64 = BasicField("<d")
 
 @compatible
 class FieldView(object):
@@ -81,6 +68,7 @@ class FieldView(object):
         self._fieldset.pack(buf, self)
         return bytes(buf)
 
+@compatible
 class FieldSet(object):
     def __init__(self, fields):
         if len(fields) == 0:
@@ -115,8 +103,118 @@ class FieldSet(object):
         offset = self.offsets[index]
         return f.unpack(memoryview(buf)[offset:offset + f.size])
 
-def Array(field, count):
-    return FieldSet([field] * count)
+@compatible
+class FieldMap(FieldSet):
+    """
+    DOCME
+    """
+    def __init__(self, fieldspec):
+        fields = []
+        names = {}
+        name_l = []
+        properties = {}
+
+        if isinstance(fieldspec, str):
+            fieldspec = parse_dsl(fieldspec)
+        if isinstance(fieldspec, dict):
+            fieldspec = list(fieldspec.items())
+
+        #print(fieldspec)
+        for i, v in enumerate(fieldspec):
+            if isinstance(v, tuple):
+                k, v = v
+            else:
+                k = None
+            if isinstance(v, (list, tuple, dict)):
+                v = FieldMap(v)
+            fields.append(v)
+            if k is not None:
+                if k in names:
+                    raise ValueError("Field named %r already defined" % k)
+                names[k] = i
+                properties[k] = property(getter(i), setter(i))
+            name_l.append(k)
+        self.names = names
+
+        super(FieldMap, self).__init__(fields)
+
+        if any(self.names):
+            def map_repr(self):
+                res = ["<%d fields:" % (len(self), )]
+                for i, k in enumerate(name_l):
+                    v_rep = repr(self[i]).splitlines(False)
+                    if k is not None:
+                        v_rep[0] = ("%s = " % k) + v_rep[0]
+                    else:
+                        v_rep[0] = ("[%d]: " % i) + v_rep[0]
+                    for l in v_rep:
+                        res.append("   " + l)
+                res.append('>')
+                return '\n'.join(res)
+
+            properties['_asdict'] = lambda self: dict((n, getattr(self, n)) for n in names)
+            properties['__repr__'] = map_repr
+            self._bound = type("BoundFieldMap", (self._bound, ), properties)
+
+
+@compatible
+class BytesView(object):
+    def __init__(self, mem):
+        self._mem = mem
+
+    def __getitem__(self, sl):
+        return self._mem[sl]
+
+    def __setitem__(self, sl, val):
+        self._mem[sl] = val
+
+    def __repr__(self):
+        return f'<{self._mem.hex()}>'
+
+    def __bytes__(self):
+        return bytes(self._mem)
+
+    def __len__(self):
+        return len(self._mem)
+
+    def hex(self):
+        return bytes(self).hex()
+
+    @property
+    def bits(self):
+        return BitView(self._mem)
+
+    def __iter__(self):
+        return iter(self._mem)
+
+    def __eq__(self, other):
+        return self._mem == other
+
+    def fields(self, spec):
+        fm = FieldMap(spec)
+        return fm.unpack(self._mem)
+
+class Bytes(object):
+    buftype = BytesView
+    def __init__(self, size):
+        self.size = size
+
+    def unpack(self, buf):
+        res = self.buftype(buf[:self.size])
+        if len(res) != self.size:
+            raise ValueError("insufficient data in buffer for Bytes field")
+        return res
+
+    def pack(self, buf, data):
+        if len(data) != self.size:
+            raise ValueError('data size mismatch for Bytes field')
+        buf[:self.size] = data
+
+    def __eq__(self, other):
+        if isinstance(other, Bytes):
+            return self.size == other.size
+        return NotImplemented
+
 
 def getter(i):
     return lambda x: x[i]
@@ -130,192 +228,123 @@ __all__ = ["u8", "byte", "i8", "char",
            "u16b", "u32b", "u64b",
            "i16", "i16l", "i32", "i32l",
            "i64", "i64l", "i16b", "i32b",
-           "i64b", "FieldSet", "FieldMap", "Bytes", "Array"]
+           "i64b", "f32", "f64", 
+           "FieldSet", "FieldMap", "Bytes"]
 
 def parse_dsl(s):
-    """
-    I'm a horrible person
+    """ Parse the fields() DSL. Grammer:
+
+        fields: (field [ ',' ])*
+        field: [identifier ':' ] type
+
+        type: typename
+            | array
+            | struct
+        typename: identifier
+        array: type '[' integer ']'
+        struct: '{' fields '}
+        
+        integer: '0x' hex_numeral 
+               | '0o' octal_numeral
+               | '0b' binary_numeral
+               | decimal
+
+        hex_numeral: ('0'...'9' | 'a'...'f')+
+        octal_numeral: '0'...'8'+
+        binary_numeral: ('0' | '1')+
+        decimal: ('1'...'9') digit*
+        digit: '0'...'9'
+
+        identifier: alpha alphanumeric*
+        alpha: ('a'...'z' | 'A'...'Z' | '_')
+        alphanumeric: alpha | digit
+
+    Tests:
+    
+    >>> parse_dsl("u8") == [(None, u8)]
+    True
+    >>> parse_dsl("f64[4]") == [(None, [f64] * 4)]
+    True
+    >>> parse_dsl("foo: bytes[32]") == [('foo', Bytes(32))]
+    True
+    >>> parse_dsl("foo: u8, bar: u8, bazz: { foo: u32 }[4]") == [('foo', u8), ('bar', u8), ('bazz', [[('foo', u32)]] * 4)]
+    True
+    >>> parse_dsl("u32[32], u32[0x20], u32[0o40], u32[0b100000]") == [(None, [u32] * 32)] * 4
+    True
     """
     # tokenize
     tokens, leftover = re.Scanner(
         [
-            (r'[a-zA-Z_]\w*', lambda s, m: ('name', m)),
-            (r'\d+', lambda s, m: ('literal', int(m))),
+            (r'[a-zA-Z_]\w*', lambda s, m: ('identifier', m)),
+            (r'(0[xob])?\d+', lambda s, m: ('literal', int(m, 0))),
             (r'[\(\[\{]', lambda s,m :('bracket_open', m)),
             (r'[\)\]\}]', lambda s,m :('bracket_close', m)),
             (r'\:', ('op_colon', None)),
+            (r',', ('op_comma', None)),
             (r'\s+', None),
         ]
     ).scan(s)
     if leftover:
         raise ValueError("Syntax error in fieldspec: invalid token at %d" % (len(s) - len(leftover)))
 
-    matching_bracket = {'(': ')', '[': ']', '{': '}', None: None}
-    def bracketeer(it, btype=None):
-        """ Group by brackets (recursively) """
-        level = []
-        for token, value in it:
-            if token == 'bracket_open':
-                level.append(bracketeer(it, value))
-            elif token == 'bracket_close':
-                if value != matching_bracket[btype]:
-                    raise ValueError("Syntax error in fieldspec: mismatched brackets")
-                return ('brackets%s' % btype, level)
-            else:
-                level.append((token, value))
-        if btype is not None:
-            raise ValueError("Syntax error in fieldspec: unmatched brackets")
-        return level
-
-    tokens = bracketeer(iter(tokens))
-    # top level is by default a {}
-    if len(tokens) == 1 and tokens[0][0] == 'brackets{':
-        tokens = tokens[0][1]
-
-    def colonize(tokens):
-        # handle colons and named fields etc.
-        last = None
-        res = []
-        it = iter(tokens)
-
-        # iterate over tokens, save each one
-        # if it is followed by a colon - get the next token and pair them
-        # if not, save it as a nameless field
-        for (token, value) in it:
-            if token == 'op_colon':
-                try:
-                    ftype = next(it)
-                except StopIteration:
-                    raise ValueError("Error in fieldspec: no field type specified")
-                if last is None:
-                    raise ValueError("Error in fieldspec: no field name specified")
-                if last[0] != 'name':
-                    raise ValueError("Invalid field name")
-                fname = last[1]
-                last = None
-            else:
-                # last one may have been a nameless field
-                fname = None
-                ftype = last
-                last = token, value
-            res.append((fname, ftype))
-        if last is not None:
-            # last member is nameless
-            res.append((None, last))
-
-        res2 = []
-        # Parse field types
-        for fname, ftype in res:
-            if ftype is None:
-                continue
-            if ftype[0] == 'name':
-                # Type is a name, get it from the list
-                field = TYPES[ftype[1]]
-            elif ftype[0] == 'fieldtype':
-                # Type is complex, use it
-                field = ftype[1]
-            elif ftype[0] == 'literal':
-                # Literal number as shorthand for byte field
-                field = Bytes(ftype[1])
-            else:
-                raise ValueError("Error in fieldspec: invalid field type ({!r})".format(ftype))
-            res2.append((fname, field))
-        return res2
-
-    def groupy(tokens):
-        # Handle arrays and complex types
-        last = None
-        res = []
-        for t, v in tokens:
-            if t == 'brackets[' or t == 'brackets(':
-                # Field is an array
-                if len(v) != 1 or v[0][0] != 'literal':
-                    raise ValueError("Error in fieldspec: invalid array")
-                if len(res) == 0:
-                    raise ValueError("Error in fieldspec: no field to make array of")
-                last = res.pop(-1)
-                if last[0] == 'name':
-                    field = TYPES[last[1]]
-                elif last[0] == 'fieldtype':
-                    field = last[1]
-                else:
-                    raise ValueError("Invalid array type")
-
-                if field == Bytes:
-                    arr = Bytes(v[0][1])
-                else:
-                    arr = Array(field,  v[0][1])
-                res.append(('fieldtype', arr))
-            elif t == 'brackets{':
-                result = groupy(v)
-                res.append(('fieldtype', result))
-            else:
-                res.append((t, v))
-        return colonize(res)
-
-
-    return groupy(tokens)
-
-
-class FieldMap(FieldSet):
-    """
-    DOCME
-    """
-    def __init__(self, fieldspec):
+    def parse_struct(tokens):
         fields = []
-        names = {}
-        name_l = []
-        properties = {}
+        while tokens and tokens[0] != ('bracket_close', '}'):
+            field = parse_field(tokens)
+            fields.append(field)
+            if tokens and tokens[0][0] == 'op_comma':
+                tokens.pop(0)
+        if not tokens:
+            raise ValueError("Unclosed struct")
+        tokens.pop(0)
+        return fields
+    
+    def make_array(ft, count):
+        if ft is Bytes or ft is byte:
+            return Bytes(count)
+        else:
+            return [ft] * count
 
-        if isinstance(fieldspec, str):
-            fieldspec = parse_dsl(fieldspec)
+    def parse_field_type(tokens):
+        tok, val = tokens.pop(0)
+        if tok == 'identifier':
+            ftype = TYPES[val]
+        elif tok == 'bracket_open' and val == '{':
+            ftype = parse_struct(tokens)
+        else:
+            raise ValueError("invalid field type")
+        # parse array 
+        while tokens and tokens[0][0] == 'bracket_open' and tokens[0][1] in '([':
+            _, brack = tokens.pop(0)
+            tok, val = tokens.pop(0)
+            if tok != 'literal':
+                raise ValueError("Invalid array length specifier")
+            closing = {'(': ')', '[': ']'}[brack]
+            if tokens.pop(0) != ('bracket_close', closing):
+                raise ValueError("unmatched array bracket")
+            ftype = make_array(ftype, val)
+        return ftype
 
-        for i, v in enumerate(fieldspec):
-            if isinstance(v, tuple):
-                k, v = v
-            else:
-                k = None
-            if isinstance(v, list):
-                v = FieldMap(v)
-            elif isinstance(v, str):
-                v = parse_dsl(v)
-                if len(v) != 1:
-                    raise ValueError("Invalid field value")
-                k2, v= v[0]
-                if k2 is not None:
-                    if k is not None:
-                        raise ValueError("Field named twice")
-                    k = k2
+    def parse_field(tokens):
+        tok, val = tokens[0]
+        if tok == 'identifier' and len(tokens) > 1 and tokens[1][0] == "op_colon":
+            del tokens[:2]
+            name = val
+        else:
+            name = None
+        ftype = parse_field_type(tokens)
+        return (name, ftype)
+    
+    fields = []
+    while tokens:
+        fields.append(parse_field(tokens))
+        if tokens and tokens[0][0] == 'op_comma':
+            tokens.pop(0)
+    return fields
 
-            elif isinstance(v, int):
-                v = Bytes(v)
-            fields.append(v)
-            if k is not None:
-                if k in names:
-                    raise ValueError("Field named %r already defined" % k)
-                names[k] = i
-                properties[k] = property(getter(i), setter(i))
-            name_l.append(k)
-        self.names = names
-        properties['_asdict'] = lambda self: dict((n, getattr(self, n)) for n in names)
-
-        def map_repr(self):
-            res = ["<%d fields:" % (len(self), )]
-            for i, k in enumerate(name_l):
-                v_rep = repr(self[i]).splitlines(False)
-                if k is not None:
-                    v_rep[0] = ("%s = " % k) + v_rep[0]
-                else:
-                    v_rep[0] = ("[%d]: " % i) + v_rep[0]
-                for l in v_rep:
-                    res.append("   " + l)
-            res.append('>')
-            return '\n'.join(res)
-        properties['__repr__'] = map_repr
-        super(FieldMap, self).__init__(fields)
-        self._bound = type("BoundFieldMap", (self._bound, ), properties)
 
 TYPES = {x: globals()[x] for x in __all__}
+TYPES.update({'bytes': Bytes})
 
 if __name__ == '__main__':
     test = bytearray.fromhex('1234567890abcdef'*3)
@@ -342,15 +371,15 @@ if __name__ == '__main__':
     ])
     print(f3.unpack(test2))
 
-    f4 = FieldMap([
-        ('foo', 'i16[2]'),
-        [
-            ("a", 'u16'),
-            'u32',
-            ("c", 'u64'),
-            ("d", 'Bytes(10)'),
-        ]
-    ])
+    f4 = FieldMap({
+        'foo': [i16, i16],
+        'bar': {
+            "a": u16,
+            "b": u32,
+            "c": u64,
+            "d": Bytes(10)
+        }
+    })
 
 
     print(f4.unpack(test2))
@@ -361,7 +390,7 @@ if __name__ == '__main__':
             a: u16
             u32
             c: u64
-            d: Bytes(10)
+            d: Bytes[10]
         }
     """)
 
