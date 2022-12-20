@@ -1,11 +1,9 @@
-from rupy.compat import *
 from rupy.ranges import Range
 from rupy.fields import FieldMap
 import contextlib
 import io
 
 
-@compatible
 class BufStream(io.IOBase):
     """ Like io.BytesIO, but using an external buffer. """
 
@@ -105,7 +103,6 @@ class BufStream(io.IOBase):
         return bytes(self.__buffer__)
 
 
-@compatible
 class Stream(io.IOBase):
     """
     Stream(filelike_object [,start=0 [, stop]])
@@ -118,7 +115,7 @@ class Stream(io.IOBase):
 
     def __init__(self, stream, start=0, stop=None):
         super(Stream, self).__init__()
-        if isinstance(stream, file):
+        if isinstance(stream, io.FileIO):
             # default file object's readinto() is bad, m'kay?
             stream = io.open(stream.fileno(), "rb", buffering=0) 
 

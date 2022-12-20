@@ -80,7 +80,6 @@ True
 
 """
 from __future__ import print_function
-from rupy.compat import *
 import itertools
 
 # The metaclass is used to support indexing syntax (ugly hack but pretty results!)
@@ -135,7 +134,7 @@ class RangeMeta(type):
             raise TypeError("Can't parse series notation")
 
 
-class Range(metabase(RangeMeta)):
+class Range(metaclass=RangeMeta):
     """
     Range([stop])
     Range(start, stop[, step])

@@ -1,9 +1,6 @@
 import itertools
 from rupy.ranges import Range
-from rupy.compat import *
 
-
-@compatible
 class BitView(object):
     def __init__(self, obj, start=None, stop=None, step=None):
         self.__buffer__ = obj
@@ -32,7 +29,7 @@ class BitView(object):
     def __getitem__(self, item):
         if isinstance(item, slice):
             return self._subslice(item)
-        elif isinstance(item, (int, long)):
+        elif isinstance(item, int):
             idx = self._range[item]
             return self._get(idx)
         else:
@@ -42,7 +39,7 @@ class BitView(object):
         if isinstance(item, slice):
             sub = self._subslice(item)
             sub.apply(value)
-        elif isinstance(item, (int, long)):
+        elif isinstance(item, int):
             idx = self._range[item]
             self._set(idx, value)
         else:
@@ -57,8 +54,6 @@ class BitView(object):
 
     def __str__(self):
         """ x.__str__() <=> str(x) """
-        # Return string (rather than bytes) in both Python 2 and 3
-        # so you can just "print b.bits"
         return ''.join(('0', '1')[x] for x in self)
 
     def __format__(self, spec):

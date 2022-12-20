@@ -7,7 +7,6 @@ import operator
 
 from rupy.buf import buf
 from rupy.bitview import BitView
-from rupy.compat import *
 
 class BasicField(object):
     def __init__(self, fmt):
@@ -37,7 +36,6 @@ i64b = BasicField(">q")
 f32 = BasicField("<f")
 f64 = BasicField("<d")
 
-@compatible
 class FieldView(object):
     _fieldset = None
     def __init__(self, buf):
@@ -68,7 +66,6 @@ class FieldView(object):
         self._fieldset.pack(buf, self)
         return bytes(buf)
 
-@compatible
 class FieldSet(object):
     def __init__(self, fields):
         if len(fields) == 0:
@@ -103,7 +100,6 @@ class FieldSet(object):
         offset = self.offsets[index]
         return f.unpack(memoryview(buf)[offset:offset + f.size])
 
-@compatible
 class FieldMap(FieldSet):
     """
     DOCME
@@ -157,7 +153,6 @@ class FieldMap(FieldSet):
             self._bound = type("BoundFieldMap", (self._bound, ), properties)
 
 
-@compatible
 class BytesView(object):
     def __init__(self, mem):
         self._mem = mem

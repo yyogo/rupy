@@ -9,7 +9,6 @@ import itertools
 from rupy.bitview import BitView
 from rupy.hexdump import HexDump
 
-from rupy.compat import *
 
 try:
     from zlib import crc32 as _crc32
@@ -30,7 +29,6 @@ _POPCNT = tuple(bin(i).count('1') for i in range(256))
 
 ByteType = type(b'x'[0])  # int in python3, str in python2
 
-@compatible
 class buf(bytearray):
     """
     buf(iterable_of_ints) -> buf.
@@ -107,7 +105,7 @@ class buf(bytearray):
         bytes B[start:end].  Optional arguments start and end are interpreted
         as in slice notation.
         """
-        if isinstance(sub, (int, long)):
+        if isinstance(sub, int):
             sub = bytearray((sub,))
         return super(buf, self).count(sub, *args, **kwargs)
 
@@ -476,57 +474,8 @@ class buf(bytearray):
         """
         return not self.translate(bytearray(range(256)), string.printable.encode("ascii"))
 
-    if hasattr(int, 'to_bytes') and hasattr(int, 'from_bytes'):
-        # yay Python 3 :)
-        @classmethod
-        def _from_int(cls, n, size, byteorder, signed):
-            return cls(int.to_bytes(n, size, byteorder, signed=signed))
-
-        def _to_int(self, byteorder, signed):
-            return int.from_bytes(self, byteorder, signed=signed)
-    else:
-        # No python 3 cool stuff :(
-        @classmethod
-        def _from_int(cls, n, size, byteorder, signed):
-            if not signed and n < 0:
-                raise OverflowError("can't convert negative int to unsigned")
-            if size * 8 < n.bit_length() + signed:
-                raise OverflowError("int too big to convert")
-
-            if signed and n < 0:
-                n += (1 << (size * 8))
-
-            bl = cls(size)
-
-            if byteorder == 'little':
-                it = range(size)
-            else:
-                it = range(size - 1, -1, -1)
-
-            for i in it:
-                bl[i] = n & 0xff
-                n >>= 8
-            return bl
-
-        def _to_int(self, byteorder, signed):
-            bl = self[::]
-            if byteorder == 'little':
-                bl.reverse()
-
-            val = long(0)
-            for b in bl:
-                val <<= 8
-                val |= b
-
-            if signed:
-                bl = (val.bit_length() + 7) / 8 * 8
-                if val & (1 << (bl - 1)):
-                    return -((1 << bl) - val)
-
-            return val
-
     @classmethod
-    def from_int(cls, n, size=None, byteorder='little', signed=False):
+    def from_int(cls, n: int, size=None, byteorder='little', signed=False):
         """
         buf.from_int(n[, size[, byteorder='little'[, signed=False]]])
 
@@ -543,7 +492,7 @@ class buf(bytearray):
         if size is None:
             bl = max(n.bit_length(), 1) + bool(signed)
             size = (bl + 7) // 8
-        return cls._from_int(n, size, byteorder, signed)
+        return cls(n.to_bytes(size, byteorder=byteorder, signed=signed))
 
     def to_int(self, byteorder='little', signed=False):
         """
@@ -559,12 +508,7 @@ class buf(bytearray):
         >>> buf(hex='ffffffff').to_int(signed=True) == -1
         True
         """
-        return self._to_int(byteorder, signed)
-
-
-    def __long__(self):
-        """ long(b) <==> b.__long__() <==> b.to_int()"""
-        return self.to_int()
+        return int.from_bytes(self, byteorder=byteorder, signed=signed)
 
     def __int__(self):
         """ int(b) <==> b.__int__() <==> b.to_int()"""
@@ -572,7 +516,7 @@ class buf(bytearray):
 
     def __xor__(self, other):
         """ b.__xor__(y) <==> b ^ y"""
-        if isinstance(other, (int, long)):
+        if isinstance(other, int):
             other = itertools.cycle([other])
         else:
             other = self.__class__(itertools.islice(other, len(self)))
@@ -580,7 +524,7 @@ class buf(bytearray):
 
     def __and__(self, other):
         """ b.__and__(y) <==> b & y"""
-        if isinstance(other, (int, long)):
+        if isinstance(other, int):
             other = itertools.cycle([other])
         else:
             other = self.__class__(itertools.islice(other, len(self)))
@@ -588,7 +532,7 @@ class buf(bytearray):
 
     def __or__(self, other):
         """ b.__or__(y) <==> b | y"""
-        if isinstance(other, (int, long)):
+        if isinstance(other, int):
             other = itertools.cycle([other])
         else:
             other = self.__class__(itertools.islice(other, len(self)))
@@ -598,7 +542,7 @@ class buf(bytearray):
         """ b.__invert__() <==> ~b """
         return self.__class__((~x) & 0xff for x in self)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.decode("ascii")
 
     def hexdump(self, *args, **kwargs):
@@ -685,7 +629,7 @@ class buf(bytearray):
         True
         """
         if offset is None:
-            return struct.unpack(fmt, buffer(self))
+            return struct.unpack(fmt, memoryview(self))
         else:
             return struct.unpack_from(fmt, self, offset)
 
@@ -804,7 +748,7 @@ class buf(bytearray):
         """
         if hasattr(fobj_or_filename, 'read') or hasattr(fobj_or_filename, 'readinto'):
             fobj = fobj_or_filename
-            if isinstance(fobj, file):
+            if isinstance(fobj, io.FileIO):
                 # default file object's readinto() is bad, m'kay?
                 fobj = io.open(fobj.fileno(), getattr(fobj, "mode", "rb"))
         else:

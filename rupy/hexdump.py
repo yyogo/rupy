@@ -1,6 +1,4 @@
-from rupy.compat import *
 
-@compatible
 class HexDump(object):
     """
     HexDump(data, width=16, groups=(2,4), prefix='', bytefmt='02x')
@@ -72,7 +70,7 @@ class HexDump(object):
             offset=offset, dump=dump_fmt.format(*data), asc=asc, self=self)
 
     def __getitem__(self, index):
-        if isinstance(index, (int, long)):
+        if isinstance(index, int):
             if index < 0:
                 index += len(self)
             offset = index * self.width
@@ -131,9 +129,9 @@ class HexDump(object):
         return self.dump(snip, skip_dups)
 
     def __bytes__(self):
-        return self.dump().encode('ascii')
+        return self.data
 
-    def __unicode__(self):
+    def __str__(self):
         return self.dump()
 
     def __repr__(self):
