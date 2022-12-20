@@ -7,9 +7,10 @@ import operator
 
 from rupy.buf import buf
 from rupy.bitview import BitView
+from typing import List, Tuple, Union
 
 class BasicField(object):
-    def __init__(self, fmt):
+    def __init__(self, fmt: str) -> None:
         self.st = struct.Struct(fmt)
         self.size = self.st.size
 
@@ -191,7 +192,7 @@ class BytesView(object):
 
 class Bytes(object):
     buftype = BytesView
-    def __init__(self, size):
+    def __init__(self, size: int) -> None:
         self.size = size
 
     def unpack(self, buf):
@@ -205,7 +206,7 @@ class Bytes(object):
             raise ValueError('data size mismatch for Bytes field')
         buf[:self.size] = data
 
-    def __eq__(self, other):
+    def __eq__(self, other: "Bytes") -> bool:
         if isinstance(other, Bytes):
             return self.size == other.size
         return NotImplemented
@@ -226,7 +227,7 @@ __all__ = ["u8", "byte", "i8", "char",
            "i64b", "f32", "f64", 
            "FieldSet", "FieldMap", "Bytes"]
 
-def parse_dsl(s):
+def parse_dsl(s: str) -> List[Union[Tuple[None, List[BasicField]], Tuple[str, Bytes], Tuple[str, BasicField], Tuple[str, List[List[Tuple[str, BasicField]]]], Tuple[None, BasicField]]]:
     """ Parse the fields() DSL. Grammer:
 
         fields: (field [ ',' ])*

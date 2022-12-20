@@ -81,10 +81,11 @@ True
 """
 from __future__ import print_function
 import itertools
+from typing import Optional, Tuple, Union
 
 # The metaclass is used to support indexing syntax (ugly hack but pretty results!)
 class RangeMeta(type):
-    def __getitem__(cls, item):
+    def __getitem__(cls, item: Union[Tuple[int, int, int, int, int], slice]) -> "Range":
         if isinstance(item, (slice, Range)):
             start, stop, step = item.start, item.stop, item.step
             return cls(start, stop, step)
@@ -163,7 +164,7 @@ class Range(metaclass=RangeMeta):
     """
     __slots__ = ['start', 'step', 'stop']
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         if args and kwargs:
             raise TypeError("Can supply either postitional arguments (range()-style) or keywords, not both")
         start, stop, step = None, None, None
@@ -193,18 +194,18 @@ class Range(metaclass=RangeMeta):
             stop = self._form(self._alias(stop))
         self.stop = stop
 
-    def _form(self, idx):
+    def _form(self, idx: int) -> int:
         """ Apply the series function on idx. -> step * idx + start """
         return self.start + self.step * idx
 
-    def _alias(self, value, roundup=True):
+    def _alias(self, value: int, roundup: bool=True) -> int:
         """ Find the nearest value in the range """
         d, m = divmod(value - self.start, self.step)
         if m != 0 and roundup:
             d += 1
         return d
 
-    def is_bounded(self):
+    def is_bounded(self) -> bool:
         """
         Range.is_bounded() -> bool
 
@@ -212,12 +213,12 @@ class Range(metaclass=RangeMeta):
         """
         return self.stop is not None
 
-    def __len__(self):
+    def __len__(self) -> int:
         if not self.is_bounded():
             raise TypeError("Unbounded range has no length")
         return (self.stop - self.start) // self.step
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Union[int, slice]) -> Union[int, "Range"]:
         if isinstance(item, slice):
             return self._subslice(item)
         else:
@@ -230,11 +231,11 @@ class Range(metaclass=RangeMeta):
                 raise IndexError(item)
             return self._form(item)
 
-    def __contains__(self, item):
+    def __contains__(self, item: int) -> bool:
         d, m = divmod(item - self.start, self.step)
         return m == 0 and d >= 0 and (not self.is_bounded() or d < len(self))
 
-    def __iter__(self):
+    def __iter__(self) ->     itertools.count:
         try:
             return iter(self.as_range())
         except (OverflowError, TypeError):
@@ -243,7 +244,7 @@ class Range(metaclass=RangeMeta):
                 it = itertools.islice(it, len(self))
             return it
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if not self.is_bounded():
             return 'Range[{}, {}, {}, ...]'.format(self[0], self[1], self[2])
         elif len(self) > 4:
@@ -259,10 +260,10 @@ class Range(metaclass=RangeMeta):
     def __pos__(self):
         return self
 
-    def __neg__(self):
+    def __neg__(self) -> "Range":
         return self * -1
 
-    def index(self, value):
+    def index(self, value: int) -> int:
         """
         Range.index(value)
 
@@ -280,7 +281,7 @@ class Range(metaclass=RangeMeta):
     def __reversed__(self):
         return iter(self[::-1])
 
-    def __eq__(self, other):
+    def __eq__(self, other: "Range") -> bool:
         if not isinstance(other, (Range, slice)):
             return NotImplemented
         return (self.start, self.stop, self.step) == (other.start, other.stop, other.step)
@@ -290,7 +291,7 @@ class Range(metaclass=RangeMeta):
             return NotImplemented
         return not self == other
 
-    def _subslice(self, sl):
+    def _subslice(self, sl: slice) -> "Range":
         if self.is_bounded():
             # easy case
             start, stop, step = sl.indices(len(self))
@@ -314,7 +315,7 @@ class Range(metaclass=RangeMeta):
             rstop = self._form(stop) if stop is not None else None
             return Range(self[start], rstop, self.step * step)
 
-    def __mul__(self, amount):
+    def __mul__(self, amount: int) -> "Range":
         return Range(self.start * amount, self.stop * amount if self.is_bounded() else None, self.step * amount)
 
     def __sub__(self, amount):
@@ -323,7 +324,7 @@ class Range(metaclass=RangeMeta):
     def __add__(self, amount):
         return Range(self.start + amount, self.stop + amount if self.is_bounded() else None, self.step)
 
-    def as_slice(self):
+    def as_slice(self) -> slice:
         """
         Range.as_slice() -> slice
 
@@ -334,7 +335,7 @@ class Range(metaclass=RangeMeta):
         """
         return slice(self.start, self.stop, self.step)
 
-    def as_range(self):
+    def as_range(self) -> range:
         """
         Range.as_range() -> range() (Python3.3+) / xrange() (Python2.7)
 
@@ -354,7 +355,7 @@ class Range(metaclass=RangeMeta):
         """
         return obj[self.as_slice()]
 
-    def clamp(self, *args):
+    def clamp(self, *args) -> "Range":
         """
         Range.clamp([low, ]high) -> Range
 
@@ -392,7 +393,7 @@ class Range(metaclass=RangeMeta):
         start, end = self._alias(low), self._alias(high, False)
         return self[max(0, start):max(0, end+1)]
 
-    def indices(self, length=None):
+    def indices(self, length: Optional[int]=None) -> Tuple[int, int, int]:
         """
         Range.indices([length]) -> (start, stop, step)
 

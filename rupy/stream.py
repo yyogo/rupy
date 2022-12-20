@@ -2,12 +2,13 @@ from rupy.ranges import Range
 from rupy.fields import FieldMap
 import contextlib
 import io
+from typing import Optional
 
 
 class BufStream(io.IOBase):
     """ Like io.BytesIO, but using an external buffer. """
 
-    def __init__(self, buffer):
+    def __init__(self, buffer: bytearray) -> None:
         self.__buffer__ = buffer
         m = memoryview(buffer)
         self.readonly = m.readonly
@@ -16,7 +17,7 @@ class BufStream(io.IOBase):
         self.pos = 0
         self.name = '<buffer_%#x>' % id(buffer)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.__buffer__)
 
     def __enter__(self):
@@ -26,13 +27,13 @@ class BufStream(io.IOBase):
         self.close()
 
     @property
-    def size(self):
+    def size(self) -> int:
         return len(self)
 
-    def _sync(self):
+    def _sync(self) -> None:
         self.pos = min(max(0, self.pos), len(self.__buffer__))
 
-    def seek(self, where, whence=io.SEEK_SET):
+    def seek(self, where: int, whence: int=io.SEEK_SET) -> int:
         if whence == io.SEEK_CUR:
             where += self.pos
         elif whence == io.SEEK_END:
@@ -50,7 +51,7 @@ class BufStream(io.IOBase):
         self.pos += len(data)
         return len(data)
 
-    def read(self, amount=None):
+    def read(self, amount: Optional[int]=None) -> bytes:
         self._sync()
         if amount is not None:
             res = self.__buffer__[self.pos:self.pos+amount]
@@ -76,7 +77,7 @@ class BufStream(io.IOBase):
             self.__buffer__[size:] = ()
             return len(self.__buffer__)
 
-    def close(self):
+    def close(self) -> None:
         self.__buffer__ = None
         super(BufStream, self).close()
 
@@ -113,7 +114,7 @@ class Stream(io.IOBase):
     """
     DEFAULT_BLOCKSIZE = 4*1024*1024  # 4Mb
 
-    def __init__(self, stream, start=0, stop=None):
+    def __init__(self, stream: BufStream, start: int=0, stop: None=None) -> None:
         super(Stream, self).__init__()
         if isinstance(stream, io.FileIO):
             # default file object's readinto() is bad, m'kay?
@@ -160,7 +161,7 @@ class Stream(io.IOBase):
         """ Stream.open(filename [, mode, start, stop, ...]) => Stream(io.open(filename, mode, ...), start, stop) """
         return cls(io.open(filename, mode, **kwargs), start=start, stop=stop)
 
-    def close(self):
+    def close(self) -> None:
         self.__stream__ = None
         super(Stream, self).close()
 
@@ -169,7 +170,7 @@ class Stream(io.IOBase):
         return cls(io.BytesIO(bytes), start=start, stop=stop)
 
     @classmethod
-    def from_buffer(cls, buffer, start=0, stop=None):
+    def from_buffer(cls, buffer: bytearray, start: int=0, stop: None=None) -> "Stream":
         return cls(BufStream(buffer), start=start, stop=stop)
 
     def __getitem__(self, idx):
@@ -254,7 +255,7 @@ class Stream(io.IOBase):
             return True
         return False
 
-    def _sync(self):
+    def _sync(self) -> None:
         try:
             self.__stream__.seek(self._ptr + self.start, io.SEEK_SET)
         except IOError:
@@ -270,7 +271,7 @@ class Stream(io.IOBase):
         finally:
             self.seek(tmp, io.SEEK_SET)
 
-    def read(self, amount=None):
+    def read(self, amount: Optional[int]=None) -> bytes:
         if amount is None or amount < 0:
             amount = self.size
         if self.size is not None:
@@ -282,7 +283,7 @@ class Stream(io.IOBase):
         self._ptr += len(res)
         return res
 
-    def read_full(self, amount):
+    def read_full(self, amount: int) -> bytes:
         """ Read the specified amount of bytes; if not enough in stream, fail (and leave stream unchanged). """
         data = self.read(amount)
         if len(data) != amount:

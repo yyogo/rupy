@@ -8,6 +8,9 @@ import itertools
 
 from rupy.bitview import BitView
 from rupy.hexdump import HexDump
+from typing import Any, Iterator, Optional, Tuple, Union
+
+from rupy.stream import BufStream
 
 
 try:
@@ -63,7 +66,7 @@ class buf(bytearray):
     # Set to 0 to disable hexdump in __repr__
     _REPR_HEXDUMP_LINES = 10
 
-    def _create_fill(self, width, pattern):
+    def _create_fill(self, width: int, pattern: bytes) -> "buf":
         real_len = max(len(self), width)
         if pattern is None:
             return self.__class__(real_len)
@@ -97,7 +100,7 @@ class buf(bytearray):
         copy[start:start + len(self)] = self
         return copy
 
-    def count(self, sub, *args, **kwargs):
+    def count(self, sub: int, *args, **kwargs) -> int:
         """
         B.count(sub [,start [,end]]) -> int
 
@@ -145,7 +148,7 @@ class buf(bytearray):
         """
         return self.__class__(super(buf, self).join(iterable_of_bytes))
 
-    def ljust(self, width, fill=None):
+    def ljust(self, width: int, fill: Optional[bytes]=None) -> "buf":
         """
         B.ljust(width[, fill]) -> copy of B
         B.rpad(width[, fill]) -> copy of B  # alias
@@ -297,7 +300,7 @@ class buf(bytearray):
         """
         return self.__class__(super(buf, self).title())
 
-    def translate(self, *args, **kwargs): # real signature unknown; restored from __doc__
+    def translate(self, *args, **kwargs) -> "buf": # real signature unknown; restored from __doc__
         """
         B.translate(table[, deletechars]) -> bytearray
 
@@ -331,7 +334,7 @@ class buf(bytearray):
         res.__iadd__(y)
         return res
 
-    def __getitem__(self, y): # real signature unknown; restored from __doc__
+    def __getitem__(self, y: Union[int, slice]) -> Union[int, "buf"]: # real signature unknown; restored from __doc__
         """ x.__getitem__(y) <==> x[y] """
         if isinstance(y, slice):
             if y.step in (None, 1):
@@ -343,7 +346,7 @@ class buf(bytearray):
         else:
             return super(buf, self).__getitem__(y)
 
-    def __mul__(self, n): # real signature unknown; restored from __doc__
+    def __mul__(self, n: int) -> "buf": # real signature unknown; restored from __doc__
         """ x.__mul__(n) <==> x*n """
         res = self.__class__(self)
         res.__imul__(n)
@@ -356,14 +359,14 @@ class buf(bytearray):
             s = ascii(bytes(self))
         return "{}({})".format(self.__class__.__name__, s)
 
-    def __hex__(self, snip=None):
+    def __hex__(self, snip: Optional[int]=None) -> str:
         if snip and len(self) > snip:
             h = self[:snip*2//3].hex() + '...' + self[-snip//3:].hex()
         else:
             h = self.hex()
         return "{}(hex='{}')".format(self.__class__.__name__, h)
 
-    def __repr__(self): # real signature unknown; restored from __doc__
+    def __repr__(self) -> str: # real signature unknown; restored from __doc__
         """ x.__repr__() <==> repr(x) """
         use_hex = self._REPR_HEX
         if use_hex is None:
@@ -382,7 +385,7 @@ class buf(bytearray):
 
     # da magic
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         """
         buf(iterable_of_ints) -> buf.
         buf(string, encoding[, errors]) -> buf.
@@ -414,7 +417,7 @@ class buf(bytearray):
         else:
             super(buf, self).__init__(*args, **kwargs)
 
-    def hex(self, uppercase=False):
+    def hex(self, uppercase: bool=False) -> str:
         """
         b.hex([uppercase=False]) -> str
         b.to_hex([uppercase=False]) -> str  # alias
@@ -429,7 +432,7 @@ class buf(bytearray):
     to_hex = hex
 
     @classmethod
-    def from_base64(cls, s, altchars="+/", paddingcheck=False):
+    def from_base64(cls, s: str, altchars: str="+/", paddingcheck: bool=False) -> "buf":
         """
         Convert a base-64 encoded byte string to a buf.
 
@@ -443,7 +446,7 @@ class buf(bytearray):
             s += "======"
         return cls(base64.b64decode(s, altchars=altchars))
 
-    def base64(self, altchars="+/", multiline=True):
+    def base64(self, altchars: str="+/", multiline: bool=True) -> str:
         """
         Convert a base-64 encoded byte string to a buf.
 
@@ -466,7 +469,7 @@ class buf(bytearray):
         """
         return not self.translate(bytearray(range(256)), bytearray(range(32, 126)))
 
-    def isprintable(self):
+    def isprintable(self) -> bool:
         """
         b.isprintable() -> bool
 
@@ -475,7 +478,7 @@ class buf(bytearray):
         return not self.translate(bytearray(range(256)), string.printable.encode("ascii"))
 
     @classmethod
-    def from_int(cls, n: int, size=None, byteorder='little', signed=False):
+    def from_int(cls, n: int, size: Optional[int]=None, byteorder: str='little', signed: bool=False) -> "buf":
         """
         buf.from_int(n[, size[, byteorder='little'[, signed=False]]])
 
@@ -494,7 +497,7 @@ class buf(bytearray):
             size = (bl + 7) // 8
         return cls(n.to_bytes(size, byteorder=byteorder, signed=signed))
 
-    def to_int(self, byteorder='little', signed=False):
+    def to_int(self, byteorder: str='little', signed: bool=False) -> int:
         """
         b.toint([byteorder='little'[, signed=False]])
 
@@ -542,10 +545,10 @@ class buf(bytearray):
         """ b.__invert__() <==> ~b """
         return self.__class__((~x) & 0xff for x in self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.decode("ascii")
 
-    def hexdump(self, *args, **kwargs):
+    def hexdump(self, *args, **kwargs) -> HexDump:
         """
         b.hexdump([hexdump_params])
 
@@ -558,7 +561,7 @@ class buf(bytearray):
         return HexDump(self, *args, **kwargs)
 
     @classmethod
-    def random(cls, size):
+    def random(cls, size: int) -> "buf":
         """
         buf.random(size) -> buf
 
@@ -578,7 +581,7 @@ class buf(bytearray):
         if len(res) != length:
             raise OverflowError("not enough data in buffer")
 
-    def blocks(self, blocksize, padding=None):
+    def blocks(self, blocksize: int, padding: Optional[bytes]=None) -> Iterator[Any]:
         """
         b.blocks(blocksize[, padding]) -> iterable_of_bufs
     
@@ -616,7 +619,7 @@ class buf(bytearray):
             raise ValueError("bytearray not evenly divided into blocks of size %r" % blocksize)
         return (self[i:i+blocksize].rpad(blocksize, padding) for i in range(0, len(self), blocksize))
 
-    def unpack(self, fmt, offset=None):
+    def unpack(self, fmt: str, offset: Optional[int]=None) -> Union[Tuple[int, int, int], Tuple[int]]:
         """
         b.unpack(fmt[, offset]) -> tuple
 
@@ -634,7 +637,7 @@ class buf(bytearray):
             return struct.unpack_from(fmt, self, offset)
 
     @classmethod
-    def pack(cls, fmt, *values):
+    def pack(cls, fmt: str, *values) -> "buf":
         """
         b.pack(fmt, values...) -> buf
 
@@ -683,7 +686,7 @@ class buf(bytearray):
         return map.unpack(data)
 
     @property
-    def bits(self):
+    def bits(self) -> BitView:
         """
         b.bits() -> BitView
 
@@ -702,7 +705,7 @@ class buf(bytearray):
         """
         return BitView(self)
 
-    def rev8(self):
+    def rev8(self) -> "buf":
         """
         b.rev8()  -> buf
 
@@ -713,7 +716,7 @@ class buf(bytearray):
         """
         return buf(_REV8[x] for x in self)
 
-    def popcount(self):
+    def popcount(self) -> int:
         """
         b.popcount() -> int
 
@@ -733,7 +736,7 @@ class buf(bytearray):
         return _crc32(buffer(self))
 
     @classmethod
-    def from_file(cls, fobj_or_filename, length=None, offset=0):
+    def from_file(cls, fobj_or_filename:     io.BytesIO, length: Optional[int]=None, offset: int=0) -> "buf":
         """
         buf.fromfile(fobj_or_filename[, length[, offset=0]]) -> buf
 
@@ -769,7 +772,7 @@ class buf(bytearray):
             return cls(fobj.read(length))
 
 
-    def to_file(self, fobj_or_filename, offset=None):
+    def to_file(self, fobj_or_filename:     io.BytesIO, offset: Optional[int]=None) -> None:
         """
         buf.tofile(fobj_or_filename[, offset])
 
@@ -813,7 +816,7 @@ class buf(bytearray):
     def __hash__(self):
         return hash(bytes(self))
 
-    def to_stream(self):
+    def to_stream(self) -> BufStream:
         """
         b.to_stream() -> BufStream
 
