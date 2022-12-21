@@ -176,7 +176,6 @@ class Seq(metaclass=SeqMeta):
         if args and (stop is not None or start is not None or step is not None):
             raise TypeError(
                 "Can supply either postitional arguments (range()-style) or keywords, not both")
-        start, stop, step = None, None, None
         if args:
             if len(args) == 1:
                 stop, = args

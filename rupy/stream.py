@@ -1,5 +1,4 @@
 from rupy.seq import Seq
-from rupy.fields import FieldMap
 import contextlib
 import io
 from typing import Optional
@@ -398,6 +397,7 @@ class Stream(io.IOBase):
         >>> print('x: {f.x:x} y: {f.y:x} z: {f.z:x}'.format(f=fields))
         x: dead y: beef z: 10000
         """
+        from rupy.fields import FieldMap
         fm = FieldMap(fieldspec)
         data = bytearray(self.read_full(fm.size))
         return fm.unpack(data)
