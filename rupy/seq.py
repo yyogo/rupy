@@ -81,13 +81,14 @@ True
 """
 from __future__ import print_function
 import itertools
+from types import EllipsisType
 from typing import Iterable, Optional, Tuple, Union
 
 # The metaclass is used to support indexing syntax (ugly hack but pretty results!)
 
 
 class SeqMeta(type):
-    def __getitem__(cls, item: Union[Tuple[Union[int, ellipsis]], slice]) -> "Seq":
+    def __getitem__(cls, item: Union[Tuple[Union[int, EllipsisType]], slice]) -> "Seq":
         if isinstance(item, (slice, Seq)):
             start, stop, step = item.start, item.stop, item.step
             return cls(start, stop, step)

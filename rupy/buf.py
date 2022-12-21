@@ -8,7 +8,7 @@ import itertools
 
 from rupy.bitview import BitView
 from rupy.hexdump import HexDump
-from typing import Any, Iterator, Optional, Tuple, Union, ByteString
+from typing import Any, Iterator, Optional, SupportsBytes, Tuple, Union, ByteString
 
 from rupy.stream import BufStream
 
@@ -100,7 +100,7 @@ class buf(bytearray):
         copy[start:start + len(self)] = self
         return copy
 
-    def count(self, sub: Union[int, SupportsBytes], *args, **kwargs) -> int:
+    def count(self, sub: Union[int, SupportsBytes, ByteString], *args, **kwargs) -> int:
         """
         B.count(sub [,start [,end]]) -> int
 
@@ -733,7 +733,7 @@ class buf(bytearray):
 
         Return the CRC32 checksum of the buffer.
         """
-        return _crc32(buffer(self))
+        return _crc32(memoryview(self))
 
     @classmethod
     def from_file(cls, fobj_or_filename:     io.BytesIO, length: Optional[int]=None, offset: int=0) -> "buf":
