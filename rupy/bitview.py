@@ -1,10 +1,10 @@
 import itertools
-from rupy.ranges import Range
+from rupy.seq import Seq
 
 class BitView(object):
     def __init__(self, obj, start=None, stop=None, step=None):
         self.__buffer__ = obj
-        self._range = Range(start, stop, step).clamp(len(obj) * 8 - 1)
+        self._range = Seq(start, stop, step).clamp(len(obj) * 8 - 1)
 
     def copy(self):
         """

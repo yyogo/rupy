@@ -1,4 +1,4 @@
-from rupy.ranges import Range
+from rupy.seq import Seq
 from rupy.fields import FieldMap
 import contextlib
 import io
@@ -221,7 +221,7 @@ class Stream(io.IOBase):
         Iterate over stream blocks with the specified blocksize.
         Yields stream slices.
         """
-        for i in Range(0, self.size, blocksize):
+        for i in Seq(0, self.size, blocksize):
             b = (self[i:i + blocksize + tail])
             yield b
 

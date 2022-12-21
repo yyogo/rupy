@@ -8,7 +8,7 @@ import itertools
 
 from rupy.bitview import BitView
 from rupy.hexdump import HexDump
-from typing import Any, Iterator, Optional, Tuple, Union
+from typing import Any, Iterator, Optional, Tuple, Union, ByteString
 
 from rupy.stream import BufStream
 
@@ -88,7 +88,7 @@ class buf(bytearray):
         """
         return self.__class__(super(buf, self).capitalize())
 
-    def center(self, width, fill=None):
+    def center(self, width: int, fill=None):
         """
         B.center(width[, fill]) -> copy of B
 
@@ -100,7 +100,7 @@ class buf(bytearray):
         copy[start:start + len(self)] = self
         return copy
 
-    def count(self, sub: int, *args, **kwargs) -> int:
+    def count(self, sub: Union[int, SupportsBytes], *args, **kwargs) -> int:
         """
         B.count(sub [,start [,end]]) -> int
 

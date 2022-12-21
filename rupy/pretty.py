@@ -1,6 +1,7 @@
+from typing import Any, Callable, Optional, AbstractSet
 from rupy import hexdump
 import sys
-nocolor = lambda x,*_: x
+nocolor = lambda x, *_: x
 try:
     from termcolor import colored
 except:
@@ -17,6 +18,7 @@ COLORSCHEME = {
     'misc': ('magenta',),
 }
 
+
 class Colorizer:
     def __init__(self, color_func, scheme):
         def colorizer(c):
@@ -27,12 +29,23 @@ class Colorizer:
         for name, attrs in scheme.items():
             setattr(self, name, colorizer(attrs))
 
-AUTO = object()
 
 
-DEFAULT_FILTER = lambda k, v: not ((isinstance(k, str) and k.startswith('_')) or v is None)
+def DEFAULT_FILTER(k, v): return not (
+    (isinstance(k, str) and k.startswith('_')) or v is None)
 
-def pretty_print(value, key=None, maxdepth=-1, filter=DEFAULT_FILTER, limit=20, colors=AUTO, visited=None, last=True, indent='', **kwargs):
+
+def pretty_print(
+        value: Any,
+        key: Any = None,
+        maxdepth: int = -1,
+        filter: Callable[[Any, Any], bool] = DEFAULT_FILTER,
+        limit: int=20,
+        colors: Optional[bool] = None,
+        visited: Optional[AbstractSet]=None,
+        last: bool=True,
+        indent:str='',
+        **kwargs):
     """ pretty_print(value, [key=None, maxdepth=-1, hide_none=True, limit=20, colors=AUTO, indent='', **kwargs])
 
     Pretty-printing for nested structures, with colors.
@@ -49,9 +62,9 @@ def pretty_print(value, key=None, maxdepth=-1, filter=DEFAULT_FILTER, limit=20, 
     """
 
     if filter is None:
-        filter = lambda k, v: True
+        filter = lambda k, v : True
 
-    if colors is AUTO:
+    if colors is None:
         # Check if stdout/file arg is a tty
         f = kwargs.get('file', sys.stdout)
         if hasattr(f, 'isatty') and f.isatty():
@@ -63,7 +76,8 @@ def pretty_print(value, key=None, maxdepth=-1, filter=DEFAULT_FILTER, limit=20, 
     if visited is None:
         visited = set()
 
-    container = hasattr(value, '__iter__') and not isinstance(value, (bytes, str, bytearray))
+    container = hasattr(value, '__iter__') and not isinstance(
+        value, (bytes, str, bytearray))
     if container:
         start = '╞╘'[last]
         if hasattr(value, 'items'):
@@ -93,11 +107,12 @@ def pretty_print(value, key=None, maxdepth=-1, filter=DEFAULT_FILTER, limit=20, 
 
     if container:
 
-        print(c.type(f"{value.__class__.__name__}  ") + c.misc(f'[len={length}]'), **kwargs)
+        print(c.type(f"{value.__class__.__name__}  ") +
+              c.misc(f'[len={length}]'), **kwargs)
 
         if id(value) in visited:
             print(c.tree(indent)
-                + c.misc('  (recursion detected)'), **kwargs)
+                  + c.misc('  (recursion detected)'), **kwargs)
             return
 
         i = 0
@@ -116,8 +131,8 @@ def pretty_print(value, key=None, maxdepth=-1, filter=DEFAULT_FILTER, limit=20, 
                 colors=colors,
                 **kwargs)
         if i < length - 1:
-            print(c.tree(indent + exindent )
-                + c.hidden(f'⋮   ({length - i} items hidden)'), **kwargs)
+            print(c.tree(indent + exindent)
+                  + c.hidden(f'⋮   ({length - i} items hidden)'), **kwargs)
 
     else:
         val = repr(value)
@@ -125,12 +140,14 @@ def pretty_print(value, key=None, maxdepth=-1, filter=DEFAULT_FILTER, limit=20, 
             if any(x < 32 or x > 127 for x in value):
                 if len(value) > 100:
                     hd = hexdump(value, prefix=indent + exindent)
-                    hd.snipfmt = c.tree('{self.prefix}') + c.hidden('⋮         [0x{bytes:x} hidden bytes]')
-                    hd.dupfmt = c.tree('{self.prefix}') + c.hidden('⋮         [0x{lines:x} duplicate lines]')
+                    hd.snipfmt = c.tree(
+                        '{self.prefix}') + c.hidden('⋮         [0x{bytes:x} hidden bytes]')
+                    hd.dupfmt = c.tree(
+                        '{self.prefix}') + c.hidden('⋮         [0x{lines:x} duplicate lines]')
                     hd.fmt = (c.tree('{self.prefix}│ ')
-                            + c.index('{offset:{self.offsetfmt}}') + '  '
-                            + c.value('{dump}') +  '  '
-                            + c.misc('{asc:{self.width}}') +  '  ' )
+                              + c.index('{offset:{self.offsetfmt}}') + '  '
+                              + c.value('{dump}') + '  '
+                              + c.misc('{asc:{self.width}}') + '  ')
                     print(c.misc('(hexdump)'), **kwargs)
                     print(hd.partial(skip_dups=1), **kwargs)
                     return

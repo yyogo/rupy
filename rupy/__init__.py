@@ -1,9 +1,11 @@
 __version__ = "0.6"
 from rupy.buf import buf
-from rupy.hexdump import hexdump
-from rupy import fields
+from rupy.bitview import BitView
+from rupy.hexdump import hexdump, HexDump
 from rupy.fields import FieldMap
-from rupy.ranges import Range
+from rupy.seq import Seq
 from rupy.stream import Stream
-import sys
-from rupy.pretty import *
+from rupy.pretty import pp
+
+__all__ = ['buf', 'BitView', 'hexdump',
+           'HexDump', 'FieldMap', 'Seq', 'Stream', 'pp']

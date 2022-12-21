@@ -99,33 +99,30 @@ buf(hex='00000005aabbccdd')
 >
 ```
 
-### `Range`
-Enhanced range(); a class that behaves like a normal range() but also enables slicing, infinite ranges, 
-series notation (e.g: `Range[1, 2, ..., 100]` is like `Range(1, 101)`) and more.
+### `Seq`
+Integer sequences. a class that behaves like a normal range() but also enables slicing, infinite ranges, 
+intuitive notation (e.g: `Seq[1, 2, ..., 100]` is like `Seq(1, 101)`) and more.
 
-Range is similar to builtin range() functions, except it also supports:
+Seq is similar to builtin range() functions, except it also supports:
     * Sub-slicing
     * Unbounded ranges
     * Series notation using ellipsis
     * Arithmetic operations on ranges
     * And much more!
 
-All this goodness is with negligible overhead, since Range() uses builtin types for the actual
-iteration, such as xrange()/range() and itertools.count().
-
 Usage examples:
 
 ```python
->>> print(Range(10))  # like range()
-Range[0, 1, ..., 9]
+>>> print(Seq(10))  # like range()
+Seq[0, 1, ..., 9]
 
->>> print(Range(None))  # no upper bound, infinite range
-Range[0, 1, 2, ...]
+>>> print(Seq(None))  # no upper bound, infinite range
+Seq[0, 1, 2, ...]
 
->>> print(Range(step=-1))
-Range[0, -1, -2, ...]
+>>> print(Seq(step=-1))
+Seq[0, -1, -2, ...]
 
->>> for i in Range[1, 2, ..., 10]:  # sequence notation
+>>> for i in Seq[1, 2, ..., 10]:  # sequence notation
 ...    print(i)
 1
 2
@@ -138,17 +135,17 @@ Range[0, -1, -2, ...]
 9
 10
 
->>> 1024 in Range[2:32768:2]  # fast containment check
+>>> 1024 in Seq[2:32768:2]  # fast containment check
 True
 
->>> for i in Range[1, 2, ...]:
+>>> for i in Seq[1, 2, ...]:
 ...    if i == 2**16:
 ...        print("No more!")
 ...        break
 No more!
 
->>> print(Range[0, ...][2:12:2])  # Ranges support slicing
-Range[2, 4, ..., 10]
+>>> print(Seq[0, ...][2:12:2])  # Seqs support slicing
+Seq[2, 4, ..., 10]
 ```
 
 ### `Stream`
